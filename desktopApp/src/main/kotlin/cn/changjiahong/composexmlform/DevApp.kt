@@ -20,7 +20,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,11 +30,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.changjiahong.composexmlui.ComposeXmlUi
+import cn.changjiahong.composexmlui.api.BindableData
 import cn.changjiahong.composexmlui.api.DynamicLayout
-import cn.changjiahong.composexmlui.api.DynamicLayoutController
+import cn.changjiahong.composexmlui.core.JsonCodec
 import cn.changjiahong.composexmlui.runtime.DynamicLayoutRuntime
-import cn.changjiahong.composexmlui.store.ObservableList
-import kotlinx.coroutines.delay
 
 private val SAMPLE_XML = """
 <Column scroll="true" padding="20" spacing="14" width="fill">
@@ -103,14 +101,19 @@ fun DevApp() {
     val registry = remember { ComposeXmlUi.createRegistry().also { DemoComponents.register(it) } }
 
     var xmlText by remember { mutableStateOf(SAMPLE_XML) }
-    val controllerRef = remember { mutableStateOf<DynamicLayoutController?>(null) }
-    var dataJson by remember { mutableStateOf("{}") }
+
+    // 业务数据由调用方持有：改 XML 只会重建运行时，用户已经填进去的内容不会丢。
+    val formData = remember { BindableData(INITIAL_DATA) }
+
+    // 订阅整表快照：输入框里的每一次修改都能在这里看到（内部写回也走同一份状态）。
+    // 真实业务里如果表单很大，逐字段用 formData.get("...") 读更划算，asState 会重建整份快照。
+    val snapshot by formData.asState()
 
     val actions = remember {
         mapOf<String, () -> Unit>(
-            "submit" to { println("[demo] submit -> ${controllerRef.value?.getJson()}") },
-            "login" to { controllerRef.value?.update("isLogin", true) },
-            "logout" to { controllerRef.value?.update("isLogin", false) },
+            "submit" to { println("[demo] submit -> ${formData.getJson()}") },
+            "login" to { formData.set("isLogin", true) },
+            "logout" to { formData.set("isLogin", false) },
         )
     }
 
@@ -119,13 +122,6 @@ fun DevApp() {
         runCatching { DynamicLayoutRuntime(xmlText, INITIAL_DATA, DEMO_CONFIG, actions, registry) }
     }
     val error = validation.exceptionOrNull()
-
-    LaunchedEffect(controllerRef.value) {
-        while (true) {
-            delay(250)
-            dataJson = controllerRef.value?.getJson() ?: "{}"
-        }
-    }
 
     Row(modifier = Modifier.fillMaxSize()) {
 
@@ -143,7 +139,7 @@ fun DevApp() {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { xmlText = SAMPLE_XML }) { Text("重置") }
                 Button(onClick = {
-                    controllerRef.value?.appendToList(
+                    formData.appendToList(
                         "contacts",
                         mapOf(
                             "id" to ++contactSeq,
@@ -153,9 +149,8 @@ fun DevApp() {
                     )
                 }) { Text("加联系人") }
                 Button(onClick = {
-                    val controller = controllerRef.value ?: return@Button
-                    val list = controller.get("contacts") as? ObservableList ?: return@Button
-                    if (list.size > 0) controller.removeListAt("contacts", list.size - 1)
+                    val size = formData.getList("contacts").size
+                    if (size > 0) formData.removeListAt("contacts", size - 1)
                 }) { Text("删最后一个") }
             }
         }
@@ -175,12 +170,11 @@ fun DevApp() {
                 } else {
                     DynamicLayout(
                         xml = xmlText,
-                        data = INITIAL_DATA,
+                        data = formData,
                         config = DEMO_CONFIG,
                         actions = actions,
                         modifier = Modifier.fillMaxSize(),
                         registry = registry,
-                        onReady = { controllerRef.value = it },
                     )
                 }
             }
@@ -193,11 +187,11 @@ fun DevApp() {
             )
 
             Column(modifier = Modifier.fillMaxWidth().height(220.dp).padding(12.dp)) {
-                Text("数据快照 controller.getData()", style = MaterialTheme.typography.titleSmall)
+                Text("数据快照 formData.asState()", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(6.dp))
                 SelectionContainer {
                     Text(
-                        text = dataJson,
+                        text = JsonCodec.encode(snapshot),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
                         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),

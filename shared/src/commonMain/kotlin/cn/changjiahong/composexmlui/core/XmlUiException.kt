@@ -36,3 +36,12 @@ fun xmlFail(
     attribute: String? = null,
     line: Int = 0,
 ): Nothing = throw XmlUiException(reason, tag, attribute, line)
+
+/**
+ * 数据层异常：`BindableData` 的路径 / JSON / 列表操作错误。
+ *
+ * 与 [XmlUiException] 分开，是因为这些错误与 XML 无关（由调用方在运行时触发），
+ * 调用方可以分别捕获。
+ */
+class DataException(reason: String) : Exception("ComposeXmlUI data: $reason")
+

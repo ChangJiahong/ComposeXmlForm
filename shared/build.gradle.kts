@@ -48,6 +48,8 @@ kotlin {
             api(libs.compose.foundation)
             api(libs.compose.material3)
             api(libs.compose.ui)
+            // JsonElement 作为 BindableData 的输入格式；只用到 runtime，不需要 serialization 编译器插件
+            api(libs.kotlinx.serializationJson)
             implementation(libs.compose.components.resources)
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodelCompose)

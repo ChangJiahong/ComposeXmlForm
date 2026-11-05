@@ -28,13 +28,18 @@ const val CONFIG_KEY = "config"
  * 根 Store：同时持有业务数据 data（可写）与只读配置 config。
  *
  * 读取顺序：`config.xxx` → 全局配置；其余 → 业务数据。
+ *
+ * 业务数据根由调用方的 `BindableData` 持有并传入（同一个 [ObservableMap] 实例），
+ * 因此业务层写入、`asState` / `observe` 订阅、引擎的双向绑定写回共享同一份状态。
  */
 class RootStore(
-    data: Map<String, Any?>,
+    dataRoot: ObservableMap,
     config: Map<String, Any?>,
 ) : Store {
 
-    private val dataMap: ObservableMap = ObservableMap(data)
+    constructor(data: Map<String, Any?>, config: Map<String, Any?>) : this(ObservableMap(data), config)
+
+    private val dataMap: ObservableMap = dataRoot
     private val configMap: ObservableMap = ObservableMap(config)
 
     /** 根作用域兜底：任何变量名都由根处理（data 优先，其次 config）。 */

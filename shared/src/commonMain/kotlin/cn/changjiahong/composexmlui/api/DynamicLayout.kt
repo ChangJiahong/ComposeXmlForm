@@ -19,13 +19,42 @@ import cn.changjiahong.composexmlui.renderer.RenderNode
 import cn.changjiahong.composexmlui.runtime.DynamicLayoutRuntime
 
 /**
- * 动态界面入口：提供 XML、初始数据、只读配置与动作函数即可渲染界面。
+ * 动态界面入口（推荐）：业务数据由调用方持有，界面是它的一个视图。
  *
  * 生命周期约定：
- * - 运行时以 (xml, config, registry) 为键记忆，重组不会重建运行时，也不会丢失用户输入。
- * - `data` 只在首次创建运行时生效；后续修改数据请使用 [DynamicLayoutController]，
- *   避免「每次重组传入新 Map 就把用户输入重置」的问题。
- * - 如果确实需要用新的 data 整体重建界面，请更换 `xml` 或 `config`，或在外层用 key() 包裹。
+ * - 运行时以 `(xml, config, registry, data)` 为键记忆：`data` 实例不变时，数据更新
+ *   走 [BindableData] 的方法，界面不会重建、用户输入不丢。
+ * - 换一个 [BindableData] 实例即视为「换了一份数据源」，运行时会重建（符合直觉）。
+ * - `config` 仍是只读配置，变化时重建；`actions` 以首次创建为准，后续新增即时生效。
+ */
+@Composable
+fun DynamicLayout(
+    xml: String,
+    data: BindableData,
+    config: Map<String, Any?> = emptyMap(),
+    actions: Map<String, () -> Unit> = emptyMap(),
+    modifier: Modifier = Modifier.fillMaxSize(),
+    registry: EngineRegistry = ComposeXmlUi.registry,
+    onReady: ((DynamicLayoutController) -> Unit)? = null,
+) {
+    val runtime = remember(xml, config, registry, data) {
+        DynamicLayoutRuntime(
+            xml = xml,
+            data = data,
+            config = config,
+            actions = actions,
+            registry = registry,
+        )
+    }
+    DynamicLayoutContent(runtime, actions, modifier, registry, onReady)
+}
+
+/**
+ * 便捷重载：直接传 Map。
+ *
+ * 注意：这里的 `data` **只在首次创建时生效**（内部包一层 [BindableData] 后不再跟随参数变化），
+ * 这是刻意的 —— 否则调用方每次重组传入新 Map 会把用户输入重置。
+ * 需要在界面存活期间更新数据，请改用 [BindableData] 重载并由自己持有实例。
  */
 @Composable
 fun DynamicLayout(
@@ -37,16 +66,26 @@ fun DynamicLayout(
     registry: EngineRegistry = ComposeXmlUi.registry,
     onReady: ((DynamicLayoutController) -> Unit)? = null,
 ) {
-    val runtime = remember(xml, config, registry) {
-        DynamicLayoutRuntime(
-            xml = xml,
-            data = data,
-            config = config,
-            actions = actions,
-            registry = registry,
-        )
-    }
+    val bindable = remember(xml, config, registry) { BindableData(data) }
+    DynamicLayout(
+        xml = xml,
+        data = bindable,
+        config = config,
+        actions = actions,
+        modifier = modifier,
+        registry = registry,
+        onReady = onReady,
+    )
+}
 
+@Composable
+private fun DynamicLayoutContent(
+    runtime: DynamicLayoutRuntime,
+    actions: Map<String, () -> Unit>,
+    modifier: Modifier,
+    registry: EngineRegistry,
+    onReady: ((DynamicLayoutController) -> Unit)?,
+) {
     // 动作表以首次创建为准，后续新增的动作即时生效（移除不回溯，避免打断已渲染界面）。
     SideEffect { runtime.actionRegistry.registerAll(actions) }
 
