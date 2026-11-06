@@ -5,6 +5,7 @@ import cn.changjiahong.composexmlui.api.DynamicLayoutController
 import cn.changjiahong.composexmlui.binding.ActionRef
 import cn.changjiahong.composexmlui.core.XmlUiException
 import cn.changjiahong.composexmlui.node.ButtonNode
+import cn.changjiahong.composexmlui.node.LayoutNode
 import cn.changjiahong.composexmlui.node.Node
 import cn.changjiahong.composexmlui.parser.EngineRegistry
 import cn.changjiahong.composexmlui.store.RootStore
@@ -113,6 +114,8 @@ class DynamicLayoutRuntime(
         if (node is ButtonNode) {
             node.action?.let { out += it to node }
         }
-        node.children.forEach { collectActions(it, out) }
+        if (node is LayoutNode) {
+            node.children.forEach { collectActions(it, out) }
+        }
     }
 }

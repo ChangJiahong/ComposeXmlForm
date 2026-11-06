@@ -17,6 +17,11 @@ import kotlin.random.Random
  * （测试、IDE 预览、程序化拼界面）。从 XML 构造的路径由各节点的 `(Attrs)` 次构造提供。
  *
  * 样式类属性不进基类 —— 需要它们的节点自己实现 [Styled]。
+ *
+ * **基类不持有 children**：只有 [LayoutNode] 才有子节点，所以「是容器」这件事
+ * 完全由类型表达。需要遍历子节点的地方写 `if (node is LayoutNode)`，
+ * 而不是在基类上放一个恒为空的 `children` —— 那样每个叶子节点都要多一个空列表字段，
+ * 而且「叶子」与「容器」的差别在类型上消失。
  */
 abstract class Node(
     id: String? = null,
@@ -31,20 +36,15 @@ abstract class Node(
      */
     val id: String = id ?: nextAutoId()
 
-    open val children: List<Node> get() = emptyList()
-
     override fun toString(): String = "<${this::class.simpleName} #$id>"
 }
 
-/** 布局节点：持有 children。真正的容器创建在渲染器里完成。 */
+/** 布局节点：唯一持有 children 的层。真正的容器创建在渲染器里完成。 */
 abstract class LayoutNode(
-    children: List<Node>,
+    val children: List<Node>,
     id: String? = null,
     line: Int = 0,
-) : Node(id, line) {
-
-    override val children: List<Node> = children
-}
+) : Node(id, line)
 
 /**
  * If 的分支容器。`Then` / `Else` 不注册标签，由 `IfNode` 的解析逻辑直接构造，
