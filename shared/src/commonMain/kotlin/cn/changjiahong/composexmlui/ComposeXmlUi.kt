@@ -52,7 +52,7 @@ object ComposeXmlUi {
  * 覆盖 `"Text"` 的标签注册就能换掉内置节点，覆盖 `TextNode::class` 的渲染器
  * 就能换掉内置画法，两者互不影响。
  *
- * 属性白名单由节点实际读取了哪些属性自动推导（`NodeContext.ensureAllConsumed`），
+ * 属性白名单由节点实际读取了哪些属性自动推导（`Attrs.assertAllConsumed`），
  * 因此新增属性只需要在节点构造参数里加一行，不会有第二处需要同步。
  */
 object DefaultComponents {
@@ -68,13 +68,13 @@ object DefaultComponents {
 
         // ---------------- 布局组件 ----------------
 
-        registry.register("Column", ColumnNode::class, ::ColumnNode, ColumnNodeRenderer())
-        registry.register("Row", RowNode::class, ::RowNode, RowNodeRenderer())
-        registry.register("Box", BoxNode::class, ::BoxNode, BoxNodeRenderer())
+        registry.registerLayout("Column", ColumnNode::class, ::ColumnNode, ColumnNodeRenderer())
+        registry.registerLayout("Row", RowNode::class, ::RowNode, RowNodeRenderer())
+        registry.registerLayout("Box", BoxNode::class, ::BoxNode, BoxNodeRenderer())
 
         // ---------------- 控制节点 ----------------
 
-        registry.register("If", IfNode::class, ::IfNode, IfNodeRenderer())
-        registry.register("Foreach", ForeachNode::class, ::ForeachNode, ForeachNodeRenderer())
+        registry.registerLayout("If", IfNode::class, ::IfNode, IfNodeRenderer())
+        registry.registerLayout("Foreach", ForeachNode::class, ::ForeachNode, ForeachNodeRenderer())
     }
 }

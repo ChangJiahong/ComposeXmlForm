@@ -3,19 +3,22 @@ package cn.changjiahong.composexmlui
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.changjiahong.composexmlui.core.XmlUiException
+import cn.changjiahong.composexmlui.node.Attrs
 import cn.changjiahong.composexmlui.node.AttrValue
 import cn.changjiahong.composexmlui.node.Dimension
+import cn.changjiahong.composexmlui.node.IfNode
 import cn.changjiahong.composexmlui.node.Node
+import cn.changjiahong.composexmlui.node.TextFieldNode
 import cn.changjiahong.composexmlui.node.TextNode
 import cn.changjiahong.composexmlui.node.ValAttr
 import cn.changjiahong.composexmlui.node.valAttr
 import cn.changjiahong.composexmlui.parser.EngineRegistry
-import cn.changjiahong.composexmlui.parser.NodeContext
 import cn.changjiahong.composexmlui.renderer.get
 import cn.changjiahong.composexmlui.runtime.DynamicLayoutRuntime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -194,12 +197,42 @@ class AttrValueTest {
         assertTrue(error.message!!.contains("fontSize"), error.message)
         assertTrue(error.message!!.contains("maxLines"), error.message)
     }
+    // ---------------- 缺省属性：缺不是错 ----------------
+
+    @Test
+    fun missingAttributesFallBackToNodeDefaults() {
+        val text = ComposeXmlUi.parse("<Text/>", registry) as TextNode
+
+        assertEquals("", literal(text.value))
+        assertNull(text.fontSize)
+        assertNull(text.color)
+        assertNull(text.maxLines)
+    }
+
+    @Test
+    fun textFieldWithoutBindingIsUncontrolled() {
+        val field = ComposeXmlUi.parse("""<TextField label="名字"/>""", registry) as TextFieldNode
+
+        // 没有 value 属性 = 没有绑定，渲染器会退化成局部 state
+        assertNull(field.value)
+        assertEquals("名字", literal(field.label))
+    }
+
+    @Test
+    fun ifWithoutTestDefaultsToFalse() {
+        val node = ComposeXmlUi.parse(
+            """<If><Then><Text value="a"/></Then></If>""",
+            registry,
+        ) as IfNode
+
+        assertEquals(false, literal(node.test))
+    }
 }
 
 private class Person(val name: String)
 
-private class PersonNode(context: NodeContext) : Node(context.id, context.line) {
-    val person: AttrValue<Person> = context.need("value")
+private class PersonNode(attrs: Attrs) : Node(attrs.id, attrs.line) {
+    val person: ValAttr<Person> = attrs.valOf("value") ?: attrs.fail("缺少必需属性 'value'", "value")
 }
 
 private fun personRegistry(): EngineRegistry = ComposeXmlUi.createRegistry().also { registry ->

@@ -1,7 +1,7 @@
 package cn.changjiahong.composexmlui.node
 
 import cn.changjiahong.composexmlui.binding.BindingParser
-import cn.changjiahong.composexmlui.parser.NodeContext
+import cn.changjiahong.composexmlui.core.XmlUiException
 
 /**
  * 控制节点：If 条件分支与 Foreach 循环。
@@ -9,38 +9,69 @@ import cn.changjiahong.composexmlui.parser.NodeContext
  * 这两者**不实现 [Styled]** —— 在 `<If>` / `<Foreach>` 上写 `padding` 会被解析期
  * 直接拒绝，而不是「接受但无效果」。
  *
- * 它们也有显式构造入口，但只搬运结构（分支 / 循环变量名），
- * XML 形状校验（必须有子节点、变量名合法）留在从 XML 构造的那条路上。
+ * 它们也是布局节点（持有 children），因为分支与循环体的子节点就是它们的内容。
+ * `<Then>` / `<Else>` 不是组件，由解析器直接造 [BranchNode]。
  */
 
 open class IfNode(
-    val test: AttrValue<Boolean>,
-    val thenBranch: BranchNode,
-    val elseBranch: BranchNode? = null,
+    val test: ValAttr<Boolean> = valAttr(false),
+    children: List<Node> = emptyList(),
     id: String? = null,
     line: Int = 0,
-) : Node(id, line) {
+) : LayoutNode(children, id, line) {
 
-    constructor(context: NodeContext) : this(
-        test = context.need("test"),
-        thenBranch = context.requireBranch("Then"),
-        elseBranch = context.optionalBranch("Else"),
-        id = context.id,
-        line = context.line,
-    ) {
-        context.ensureChildTags("Then", "Else")
+    val thenBranch: BranchNode
+    val elseBranch: BranchNode?
+
+    init {
+        var then: BranchNode? = null
+        var otherwise: BranchNode? = null
+        children.forEach { child ->
+            val branch = child as? BranchNode
+                ?: fail(line, "只允许包含 <Then> / <Else>，实际出现 $child")
+            when (branch.branchTag) {
+                THEN -> {
+                    if (then != null) fail(line, "只允许一个 <Then> 分支")
+                    then = branch
+                }
+
+                ELSE -> {
+                    if (otherwise != null) fail(line, "只允许一个 <Else> 分支")
+                    otherwise = branch
+                }
+
+                else -> fail(line, "未知的分支 <${branch.branchTag}>")
+            }
+        }
+        thenBranch = then ?: fail(line, "缺少必需的分支 <Then>")
+        elseBranch = otherwise
     }
 
-    /** 供遍历 / 校验使用。 */
-    override val children: List<Node> get() = listOfNotNull(thenBranch, elseBranch)
+    constructor(attrs: Attrs, children: List<Node>) : this(
+        test = attrs.valOf("test") ?: valAttr(false),
+        children = children,
+        id = attrs.id,
+        line = attrs.line,
+    )
+
+    companion object {
+        const val TAG = "If"
+        const val THEN = "Then"
+        const val ELSE = "Else"
+
+        private fun fail(line: Int, reason: String): Nothing =
+            throw XmlUiException(reason, tag = TAG, line = line)
+    }
 }
 
 /**
  * 列表循环。`item` / `index` / `key` 是**变量名与字段名，不是值**：
  * 绑定它们无法确定按哪一列对齐元素，所以保持普通字符串。
+ *
+ * `items` 没写时是空列表 —— 循环体不渲染，但不会报错。
  */
 open class ForeachNode(
-    val items: VarAttr<Any>,
+    val items: ValAttr<Any> = valAttr(emptyList<Any>()),
     val itemName: String = "item",
     val indexName: String? = null,
     val keyAttribute: String? = null,
@@ -49,21 +80,21 @@ open class ForeachNode(
     line: Int = 0,
 ) : LayoutNode(children, id, line) {
 
-    constructor(context: NodeContext) : this(
-        items = context.needWritable("items"),
-        itemName = context.optional("item") ?: "item",
-        indexName = context.optional("index"),
-        keyAttribute = context.optional("key"),
-        children = context.children,
-        id = context.id,
-        line = context.line,
+    constructor(attrs: Attrs, children: List<Node>) : this(
+        items = attrs.valOf("items") ?: valAttr(emptyList<Any>()),
+        itemName = attrs.raw("item") ?: "item",
+        indexName = attrs.raw("index"),
+        keyAttribute = attrs.raw("key"),
+        children = children,
+        id = attrs.id,
+        line = attrs.line,
     ) {
-        context.ensureChildren()
+        if (children.isEmpty()) attrs.fail("至少需要一个子节点")
         if (!BindingParser.isIdentifier(itemName)) {
-            context.fail("item 必须是合法变量名，实际为 '$itemName'", "item")
+            attrs.fail("item 必须是合法变量名，实际为 '$itemName'", "item")
         }
         if (indexName != null && !BindingParser.isIdentifier(indexName)) {
-            context.fail("index 必须是合法变量名，实际为 '$indexName'", "index")
+            attrs.fail("index 必须是合法变量名，实际为 '$indexName'", "index")
         }
     }
 }

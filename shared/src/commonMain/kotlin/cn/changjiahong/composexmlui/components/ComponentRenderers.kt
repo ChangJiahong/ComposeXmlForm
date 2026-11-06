@@ -26,7 +26,7 @@ import cn.changjiahong.composexmlui.node.TextFieldNode
 import cn.changjiahong.composexmlui.node.TextNode
 import cn.changjiahong.composexmlui.renderer.LocalActionRegistry
 import cn.changjiahong.composexmlui.renderer.NodeRenderer
-import cn.changjiahong.composexmlui.renderer.asState
+import cn.changjiahong.composexmlui.renderer.asStateOr
 import cn.changjiahong.composexmlui.renderer.containerModifier
 import cn.changjiahong.composexmlui.renderer.current
 import cn.changjiahong.composexmlui.store.ObservableData
@@ -75,13 +75,14 @@ class ButtonNodeRenderer : NodeRenderer<ButtonNode>() {
 
 /**
  * TextField：双向绑定。
- * [asState] 已经把当前作用域捕获进句柄，读订阅、写回数据都不再需要显式拿 owner。
+ * [asStateOr] 在「写了 `value="{{path}}"`」时把作用域捕获进句柄（读订阅、写回数据），
+ * 没写 `value` 时退化为局部 state —— 非受控输入框，能打字，只是不写回任何数据。
  */
 class TextFieldNodeRenderer : NodeRenderer<TextFieldNode>() {
 
     @Composable
     override fun Render(node: TextFieldNode) {
-        val value = node.value.asState()
+        val value = node.value.asStateOr("")
         val labelText = node.label?.current()
         val placeholderText = node.placeholder?.current()
 
@@ -113,10 +114,10 @@ class SelectNodeRenderer : NodeRenderer<SelectNode>() {
     @Composable
     override fun Render(node: SelectNode) {
         var expanded by remember { mutableStateOf(false) }
-        val target = node.value?.asState()
+        val target = node.value.asStateOr(null)
 
         val options = SelectOptions.parse(node.options.current())
-        val currentValue = target?.value
+        val currentValue = target.value
         val selected = options.firstOrNull { it.value == currentValue }
             ?: options.firstOrNull {
                 ObservableData.asString(it.value) == ObservableData.asString(currentValue)
@@ -150,7 +151,7 @@ class SelectNodeRenderer : NodeRenderer<SelectNode>() {
                             text = { Text(option.label) },
                             onClick = {
                                 expanded = false
-                                target?.let { it.value = option.value }
+                                target.value = option.value
                             },
                         )
                     }

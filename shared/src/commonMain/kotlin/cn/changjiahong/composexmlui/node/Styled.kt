@@ -2,7 +2,6 @@ package cn.changjiahong.composexmlui.node
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
-import cn.changjiahong.composexmlui.parser.NodeContext
 
 /**
  * 尺寸语义：`fill` / `wrap` / 具体数值。
@@ -24,9 +23,9 @@ sealed interface Dimension {
  * 这一点和「所有节点共有一组属性」的模型不同：`<If>` / `<Foreach>` 没有实现它，
  * 所以在它们上面写 `padding` 会被解析期直接拒绝，而不是「接受但无效果」。
  *
- * 实现方式不是接口委托（`Styled by BoxStyle(context)`），而是暴露一个 [style] 对象、
+ * 实现方式不是接口委托（`Styled by BoxStyle(attrs)`），而是暴露一个 [style] 对象、
  * 由接口提供默认 getter：委托只能在主构造的父类型列表里求值，会逼着每个节点把
- * `context` 留在主构造里，而节点的属性值需要能被直接传入。多一层取值没有额外开销。
+ * `attrs` 留在主构造里，而节点的属性值需要能被直接传入。多一层取值没有额外开销。
  */
 interface Styled {
 
@@ -44,7 +43,7 @@ interface Styled {
  * [Styled] 的标准实现：6 个样式属性的容器。
  *
  * 两种构造方式对应两种节点构造方式：
- * - `BoxStyle(context)`：从 XML 读（属性名因此只在这一个文件里出现）；
+ * - `BoxStyle(attrs)`：从 XML 读（属性名因此只在这一个文件里出现）；
  * - `BoxStyle(width = ..., padding = ...)`：代码里直接给值。
  */
 class BoxStyle(
@@ -58,12 +57,12 @@ class BoxStyle(
 
     override val style: BoxStyle get() = this
 
-    constructor(context: NodeContext) : this(
-        width = context.attr("width"),
-        height = context.attr("height"),
-        padding = context.attr("padding"),
-        paddingHorizontal = context.attr("paddingHorizontal"),
-        paddingVertical = context.attr("paddingVertical"),
-        backgroundColor = context.attr("backgroundColor"),
+    constructor(attrs: Attrs) : this(
+        width = attrs.valOf("width"),
+        height = attrs.valOf("height"),
+        padding = attrs.valOf("padding"),
+        paddingHorizontal = attrs.valOf("paddingHorizontal"),
+        paddingVertical = attrs.valOf("paddingVertical"),
+        backgroundColor = attrs.valOf("backgroundColor"),
     )
 }

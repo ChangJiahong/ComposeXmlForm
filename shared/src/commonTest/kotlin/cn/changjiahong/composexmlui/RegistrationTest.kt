@@ -4,13 +4,13 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import cn.changjiahong.composexmlui.components.TextNodeRenderer
 import cn.changjiahong.composexmlui.core.XmlUiException
+import cn.changjiahong.composexmlui.node.Attrs
 import cn.changjiahong.composexmlui.node.AttrValue
 import cn.changjiahong.composexmlui.node.ColumnNode
 import cn.changjiahong.composexmlui.node.Dimension
 import cn.changjiahong.composexmlui.node.Node
 import cn.changjiahong.composexmlui.node.TextNode
 import cn.changjiahong.composexmlui.node.ValAttr
-import cn.changjiahong.composexmlui.parser.NodeContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -118,9 +118,9 @@ class RegistrationTest {
 }
 
 /** 继承内置节点扩展属性：只有 `letterSpacing` 是新的。 */
-private class RichTextNode(context: NodeContext) : TextNode(context) {
-    val letterSpacing: AttrValue<TextUnit>? = context.attr("letterSpacing")
+private class RichTextNode(attrs: Attrs) : TextNode(attrs) {
+    val letterSpacing: AttrValue<TextUnit>? = attrs.valOf("letterSpacing")
 }
 
 /** 只注册节点、不注册渲染器，用于验证报错信息。 */
-private class OrphanNode(context: NodeContext) : Node(context.id, context.line)
+private class OrphanNode(attrs: Attrs) : Node(attrs.id, attrs.line)

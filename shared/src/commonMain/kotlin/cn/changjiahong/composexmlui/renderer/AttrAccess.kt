@@ -1,6 +1,7 @@
 package cn.changjiahong.composexmlui.renderer
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import cn.changjiahong.composexmlui.node.AttrValue
 import cn.changjiahong.composexmlui.node.VarAttr
@@ -45,18 +46,44 @@ fun <T> AttrValue<T>.get(env: StoreOwner): T? = read(env)
 @Composable
 fun <T> VarAttr<T>.asState(): AttrState<T> {
     val env = LocalStoreOwner.current
-    return remember(this, env) { AttrState(this, env) }
+    val attr = this
+    return remember(attr, env) { AttrState({ attr.read(env) }, { attr.write(env, it) }) }
+}
+
+/**
+ * 可空 [VarAttr] 的读法：**没有绑定就退化成局部 state**。
+ *
+ * 这是「属性都可以不写」在双向绑定上的落点：`<TextField/>` 不写 `value`，
+ * 输入框照常可以打字、清空、选中，只是内容不回写任何数据 ——
+ * 用户看到的差别仅仅是「data 没跟着变」。
+ *
+ * 局部 state 活在 composition 里（`remember`），不放进节点：
+ * 节点树会被 `LayoutCache` 跨界面复用，把 `MutableState` 放进节点等于让两个界面
+ * 共享同一个输入框内容。
+ */
+@Composable
+fun <T> VarAttr<T>?.asStateOr(default: T? = null): AttrState<T> {
+    val env = LocalStoreOwner.current
+    val local = remember { mutableStateOf(default) }
+    val bound = this
+    return remember(bound, env, local) {
+        if (bound != null) {
+            AttrState({ bound.read(env) }, { bound.write(env, it) })
+        } else {
+            AttrState({ local.value }, { local.value = it })
+        }
+    }
 }
 
 class AttrState<T> internal constructor(
-    private val attr: VarAttr<T>,
-    private val env: StoreOwner,
+    private val reader: () -> T?,
+    private val writer: (T?) -> Unit,
 ) {
 
-    /** 读：订阅当前绑定的字段；写：直接写回数据源。 */
+    /** 读：订阅当前绑定的字段；写：写回数据源（或局部 state）。 */
     var value: T?
-        get() = attr.read(env)
-        set(newValue) = attr.write(env, newValue)
+        get() = reader()
+        set(newValue) = writer(newValue)
 
     operator fun getValue(thisRef: Any?, property: KProperty<*>): T? = value
 
@@ -66,7 +93,7 @@ class AttrState<T> internal constructor(
 }
 
 /**
- * 枚举型属性（对齐 / 排列等）的标准读法：节点声明成 `AttrValue<String>`，
+ * 枚举型属性（对齐 / 排列等）的标准读法：节点声明成 `ValAttr<String>`，
  * 渲染器提供「字符串 → Compose 枚举」的映射。
  *
  * 映射留在渲染器，是因为 `Alignment` / `Arrangement` 属于 Compose 排版体系，

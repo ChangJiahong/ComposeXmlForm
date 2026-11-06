@@ -80,12 +80,12 @@ class EngineTest {
     }
 
     @Test
-    fun missingRequiredAttributeReportsLine() {
-        val error = assertFailsWith<XmlUiException> {
-            ComposeXmlUi.parse("<Column>\n  <Text/>\n</Column>", registry)
-        }
-        assertEquals(2, error.line)
-        assertTrue(error.message!!.contains("value"), error.message)
+    fun missingAttributeFallsBackToDefault() {
+        val root = ComposeXmlUi.parse("<Column>\n  <Text/>\n</Column>", registry) as ColumnNode
+        val text = root.children.single() as TextNode
+
+        // 缺属性不是错误：Text 的 value 默认是空字符串
+        assertEquals("", text.value.constant)
     }
 
     @Test
