@@ -101,7 +101,7 @@ class DynamicLayoutRuntime(
             if (!actionRegistry.has(action.name)) {
                 throw XmlUiException(
                     "action 引用了未注册的函数 ${action.raw}。请通过 actions 参数注册 '${action.name}'",
-                    tag = node.tag,
+                    tag = node::class.simpleName,
                     attribute = "action",
                     line = node.line,
                 )

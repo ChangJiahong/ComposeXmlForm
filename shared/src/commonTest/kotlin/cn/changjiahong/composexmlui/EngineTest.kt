@@ -7,6 +7,7 @@ import cn.changjiahong.composexmlui.node.ColumnNode
 import cn.changjiahong.composexmlui.node.ForeachNode
 import cn.changjiahong.composexmlui.node.IfNode
 import cn.changjiahong.composexmlui.node.TextNode
+import cn.changjiahong.composexmlui.renderer.get
 import cn.changjiahong.composexmlui.runtime.DynamicLayoutRuntime
 import cn.changjiahong.composexmlui.store.ObservableList
 import cn.changjiahong.composexmlui.store.ObservableMap
@@ -55,7 +56,9 @@ class EngineTest {
         )
         assertTrue(root is ColumnNode)
         val text = root.children.single() as TextNode
-        assertEquals("username", text.expression("value").pathText)
+        assertEquals("username", text.value.path!!.raw)
+        assertEquals("Text", text.value.site.tag)
+        assertEquals("value", text.value.site.attribute)
     }
 
     @Test
@@ -147,7 +150,7 @@ class EngineTest {
     fun readsNestedAndScopedPaths() {
         val rt = runtime("""<Column><Text value="{{user.name}}"/></Column>""")
         val text = (rt.layout.root as ColumnNode).children.single() as TextNode
-        assertEquals("张三", rt.rootOwner.readString(text.expression("value")))
+        assertEquals("张三", text.value.get(rt.rootOwner))
     }
 
     @Test

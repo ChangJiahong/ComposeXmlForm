@@ -11,6 +11,7 @@ import cn.changjiahong.composexmlui.node.IfNode
 import cn.changjiahong.composexmlui.renderer.LocalStoreOwner
 import cn.changjiahong.composexmlui.renderer.NodeRenderer
 import cn.changjiahong.composexmlui.renderer.RenderNode
+import cn.changjiahong.composexmlui.renderer.current
 import cn.changjiahong.composexmlui.store.ObservableData
 import cn.changjiahong.composexmlui.store.ObservableList
 import cn.changjiahong.composexmlui.store.ObservableMap
@@ -27,8 +28,7 @@ class IfNodeRenderer : NodeRenderer<IfNode> {
 
     @Composable
     override fun Render(node: IfNode) {
-        val owner = LocalStoreOwner.current
-        val matched = owner.readBoolean(node.test)
+        val matched = node.test.current() ?: false
         val branch = if (matched) node.thenBranch else node.elseBranch
         branch?.children?.forEach { child -> RenderNode(child) }
     }
@@ -48,7 +48,7 @@ class ForeachNodeRenderer : NodeRenderer<ForeachNode> {
     @Composable
     override fun Render(node: ForeachNode) {
         val owner = LocalStoreOwner.current
-        val source = owner.read(node.items)
+        val source = node.items.current()
         val list = source as? ObservableList ?: run {
             if (source != null) {
                 throw XmlUiException(
@@ -89,7 +89,7 @@ class ForeachNodeRenderer : NodeRenderer<ForeachNode> {
     }
 
     private fun stableKey(node: ForeachNode, element: Any?, index: Int): String {
-        val prefix = node.id ?: "foreach@${node.line}"
+        val prefix = node.id
         val keyAttribute = node.keyAttribute
         val rawKey = if (keyAttribute != null && element is ObservableMap) {
             element.get(keyAttribute)

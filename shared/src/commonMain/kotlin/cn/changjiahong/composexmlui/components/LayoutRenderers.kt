@@ -12,27 +12,28 @@ import androidx.compose.ui.Alignment
 import cn.changjiahong.composexmlui.node.BoxNode
 import cn.changjiahong.composexmlui.node.ColumnNode
 import cn.changjiahong.composexmlui.node.RowNode
-import cn.changjiahong.composexmlui.renderer.Attrs
 import cn.changjiahong.composexmlui.renderer.NodeRenderer
 import cn.changjiahong.composexmlui.renderer.RenderNode
+import cn.changjiahong.composexmlui.renderer.choose
 import cn.changjiahong.composexmlui.renderer.containerModifier
-import cn.changjiahong.composexmlui.renderer.enumAttr
+import cn.changjiahong.composexmlui.renderer.current
 
 /**
- * 布局节点渲染器：只负责创建 Compose 容器并递归渲染子节点，
- * 不解析 XML、不管理业务数据。
+ * 布局节点渲染器：只负责创建 Compose 容器并递归渲染子节点。
+ *
+ * 枚举型属性（arrangement / alignment）在节点里声明为 `AttrValue<String>`，
+ * 由这里的映射表翻译成 Compose 类型：节点定义不依赖排版 API。
  */
 class ColumnNodeRenderer : NodeRenderer<ColumnNode> {
 
     @Composable
     override fun Render(node: ColumnNode) {
-        val scroll = Attrs.bool(node, "scroll") ?: false
-        val spacing = Attrs.dp(node, "spacing")
+        val scroll = node.scroll?.current() ?: false
+        val spacing = node.spacing?.current()
         val arrangement = if (spacing != null) {
             Arrangement.spacedBy(spacing)
         } else {
-            node.enumAttr(
-                "arrangement",
+            node.arrangement.choose(
                 mapOf(
                     "top" to Arrangement.Top,
                     "center" to Arrangement.Center,
@@ -44,8 +45,7 @@ class ColumnNodeRenderer : NodeRenderer<ColumnNode> {
                 Arrangement.Top,
             )
         }
-        val alignment = node.enumAttr(
-            "horizontalAlignment",
+        val alignment = node.horizontalAlignment.choose(
             mapOf(
                 "start" to Alignment.Start,
                 "center" to Alignment.CenterHorizontally,
@@ -71,13 +71,12 @@ class RowNodeRenderer : NodeRenderer<RowNode> {
 
     @Composable
     override fun Render(node: RowNode) {
-        val scroll = Attrs.bool(node, "scroll") ?: false
-        val spacing = Attrs.dp(node, "spacing")
+        val scroll = node.scroll?.current() ?: false
+        val spacing = node.spacing?.current()
         val arrangement = if (spacing != null) {
             Arrangement.spacedBy(spacing)
         } else {
-            node.enumAttr(
-                "arrangement",
+            node.arrangement.choose(
                 mapOf(
                     "start" to Arrangement.Start,
                     "center" to Arrangement.Center,
@@ -89,8 +88,7 @@ class RowNodeRenderer : NodeRenderer<RowNode> {
                 Arrangement.Start,
             )
         }
-        val alignment = node.enumAttr(
-            "verticalAlignment",
+        val alignment = node.verticalAlignment.choose(
             mapOf(
                 "top" to Alignment.Top,
                 "center" to Alignment.CenterVertically,
@@ -116,8 +114,7 @@ class BoxNodeRenderer : NodeRenderer<BoxNode> {
 
     @Composable
     override fun Render(node: BoxNode) {
-        val alignment = node.enumAttr(
-            "contentAlignment",
+        val alignment = node.contentAlignment.choose(
             mapOf(
                 "center" to Alignment.Center,
                 "topStart" to Alignment.TopStart,

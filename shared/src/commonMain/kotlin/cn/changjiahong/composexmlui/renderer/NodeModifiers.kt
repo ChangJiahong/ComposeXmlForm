@@ -6,55 +6,49 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import cn.changjiahong.composexmlui.core.XmlUiException
-import cn.changjiahong.composexmlui.node.Node
+import cn.changjiahong.composexmlui.node.Dimension
+import cn.changjiahong.composexmlui.node.Styled
 
 /**
- * 通用容器修饰符：尺寸、内边距、背景色。
+ * 通用修饰符：尺寸、内边距、背景色。
  *
- * 支持 `width="fill"` / `width="200"` / `height="fill"` 这类写法，
- * 所有渲染器共用，避免重复实现。
+ * 只对实现了 [Styled] 的节点可用 —— 没实现 `Styled` 的节点（`<If>` / `<Foreach>`）
+ * 在 XML 里写这些属性会在解析期被拒，而不是渲染时静默忽略。
+ *
+ * 属性值在解析期已经定型（`fill` → [Dimension.Fill]，`12` → `12.dp`），
+ * 这里只做「把语义翻译成 Modifier」，不再解析字符串。
  */
-fun Node.containerModifier(): Modifier {
+@Composable
+fun Styled.containerModifier(): Modifier {
     var modifier: Modifier = Modifier
 
-    raw("width")?.let { raw ->
-        when (raw.trim().lowercase()) {
-            "fill", "fillmax", "match", "match_parent" -> modifier = modifier.fillMaxWidth()
-            "wrap", "wrap_content", "auto" -> Unit
-            else -> modifier = modifier.width(Attrs.dp(this, "width")!!)
+    width?.current()?.let { dimension ->
+        modifier = when (dimension) {
+            Dimension.Fill -> modifier.fillMaxWidth()
+            Dimension.Wrap -> modifier
+            is Dimension.Fixed -> modifier.width(dimension.dp)
         }
     }
 
-    raw("height")?.let { raw ->
-        when (raw.trim().lowercase()) {
-            "fill", "fillmax", "match", "match_parent" -> modifier = modifier.fillMaxHeight()
-            "wrap", "wrap_content", "auto" -> Unit
-            else -> modifier = modifier.height(Attrs.dp(this, "height")!!)
+    height?.current()?.let { dimension ->
+        modifier = when (dimension) {
+            Dimension.Fill -> modifier.fillMaxHeight()
+            Dimension.Wrap -> modifier
+            is Dimension.Fixed -> modifier.height(dimension.dp)
         }
     }
 
-    val padding = Attrs.dp(this, "padding")
-    val horizontal = Attrs.dp(this, "paddingHorizontal") ?: padding
-    val vertical = Attrs.dp(this, "paddingVertical") ?: padding
+    val all = padding?.current()
+    val horizontal = paddingHorizontal?.current() ?: all
+    val vertical = paddingVertical?.current() ?: all
     if (horizontal != null || vertical != null) {
         modifier = modifier.padding(horizontal = horizontal ?: 0.dp, vertical = vertical ?: 0.dp)
     }
 
-    Attrs.color(this, "backgroundColor")?.let { color -> modifier = modifier.background(color) }
+    backgroundColor?.current()?.let { color -> modifier = modifier.background(color) }
 
     return modifier
-}
-
-/** 供布局渲染器解析对齐/排列等枚举属性。 */
-internal fun <T> Node.enumAttr(name: String, mapping: Map<String, T>, default: T): T {
-    val raw = raw(name)?.trim() ?: return default
-    return mapping[raw.lowercase()] ?: throw XmlUiException(
-        "属性值 '$raw' 无效，期望 ${mapping.keys.sorted().joinToString(" / ")}",
-        tag = tag,
-        attribute = name,
-        line = line,
-    )
 }

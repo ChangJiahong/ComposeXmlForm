@@ -1,137 +1,70 @@
 package cn.changjiahong.composexmlui.node
 
-import cn.changjiahong.composexmlui.binding.ActionRef
-import cn.changjiahong.composexmlui.binding.BindingExpression
-import cn.changjiahong.composexmlui.binding.BindingParser
+import cn.changjiahong.composexmlui.parser.NodeContext
+import kotlin.random.Random
 
 /**
- * 节点树是 XML 与 Compose 渲染之间的中间表示。
+ * 节点树是 XML 与渲染之间的中间表示。
  *
- * 职责边界：Node 只保存「界面描述」，不持有 Compose UI、不执行渲染、不订阅业务数据，
- * 因此节点树可以独立解析、校验、缓存与复用。
+ * 职责边界：
+ * - 只保存「界面描述」，属性是**显式字段**而不是 `Map<String, String>`：
+ *   拼错属性名是编译错误，必填属性漏传也是编译错误。
+ * - 不持有渲染逻辑，因此节点树可以独立解析、校验、缓存与复用；
+ *   渲染由 [cn.changjiahong.composexmlui.renderer.NodeRenderer] 按类型分派。
+ * - 属性值可以是字面量或绑定表达式（[AttrValue]），但节点自身始终不可变。
+ *
+ * 基类只保留两个字段：[id]（节点身份）与 [line]（解析期错误定位）。
+ * 样式类属性不进基类 —— 需要它们的节点自己实现 [Styled]。
  */
-abstract class Node(
-    val attributes: Map<String, String>,
-    val line: Int = 0,
+abstract class Node protected constructor(
+    id: String?,
+    val line: Int,
 ) {
 
-    abstract val tag: String
+    /**
+     * 节点身份：XML 写了 `id` 就用它，缺省自动生成。
+     *
+     * 自动 id 在同一棵被缓存的节点树里稳定（`LayoutCache` 复用整棵树），
+     * 只有 XML 变化、重新解析时才会变。
+     */
+    val id: String = id ?: nextAutoId()
 
-    val id: String? get() = attributes["id"]
+    /** 从解析上下文构建：id 与行号都来自 XML。 */
+    protected constructor(context: NodeContext) : this(context.optional("id"), context.line)
+
+    /** 没有 XML 来源的节点（`<Then>` / `<Else>`）用。 */
+    protected constructor(line: Int) : this(null, line)
 
     open val children: List<Node> get() = emptyList()
 
-    /** 属性 → 预处理后的表达式对象（字面值也是表达式），解析只发生一次。 */
-    val expressions: Map<String, BindingExpression> = attributes.mapValues { (_, value) ->
-        BindingParser.parseAttribute(value)
-    }
-
-    fun expression(name: String): BindingExpression =
-        expressions[name] ?: BindingExpression.Literal("")
-
-    fun expressionOrNull(name: String): BindingExpression? = expressions[name]
-
-    fun raw(name: String): String? = attributes[name]
-
-    override fun toString(): String = if (id != null) "<$tag #$id>" else "<$tag>"
+    override fun toString(): String = "<${this::class.simpleName} #$id>"
 }
 
-/** 布局节点：持有 children，负责创建 Compose 容器并递归渲染。 */
-abstract class LayoutNode(
-    attributes: Map<String, String>,
-    override val children: List<Node>,
-    line: Int = 0,
-) : Node(attributes, line)
+/** 布局节点：持有 children。真正的容器创建在渲染器里完成。 */
+abstract class LayoutNode protected constructor(
+    id: String?,
+    children: List<Node>,
+    line: Int,
+) : Node(id, line) {
 
-// ---------------------------------------------------------------------------
-// 叶子组件节点：不包含 children
-// ---------------------------------------------------------------------------
+    override val children: List<Node> = children
 
-class TextNode(attributes: Map<String, String>, line: Int = 0) : Node(attributes, line) {
-    override val tag: String get() = "Text"
+    protected constructor(context: NodeContext, children: List<Node>) :
+        this(context.optional("id"), children, context.line)
 }
-
-class ButtonNode(
-    attributes: Map<String, String>,
-    val action: ActionRef?,
-    line: Int = 0,
-) : Node(attributes, line) {
-    override val tag: String get() = "Button"
-}
-
-class TextFieldNode(attributes: Map<String, String>, line: Int = 0) : Node(attributes, line) {
-    override val tag: String get() = "TextField"
-}
-
-class SelectNode(attributes: Map<String, String>, line: Int = 0) : Node(attributes, line) {
-    override val tag: String get() = "Select"
-}
-
-// ---------------------------------------------------------------------------
-// 布局节点
-// ---------------------------------------------------------------------------
-
-class ColumnNode(
-    attributes: Map<String, String>,
-    override val children: List<Node>,
-    line: Int = 0,
-) : LayoutNode(attributes, children, line) {
-    override val tag: String get() = "Column"
-}
-
-class RowNode(
-    attributes: Map<String, String>,
-    override val children: List<Node>,
-    line: Int = 0,
-) : LayoutNode(attributes, children, line) {
-    override val tag: String get() = "Row"
-}
-
-class BoxNode(
-    attributes: Map<String, String>,
-    override val children: List<Node>,
-    line: Int = 0,
-) : LayoutNode(attributes, children, line) {
-    override val tag: String get() = "Box"
-}
-
-// ---------------------------------------------------------------------------
-// 控制节点
-// ---------------------------------------------------------------------------
 
 /**
- * If 分支容器。`Then` / `Else` 不注册渲染器，由 [IfNode] 的渲染器直接展开其 children，
- * 因此它们只在 If 内部出现。
+ * If 的分支容器。`Then` / `Else` 不注册标签，由 `IfNode` 的解析逻辑直接构造，
+ * 因此它们没有属性，id 自动生成。
  */
 class BranchNode(
     val branchTag: String,
-    override val children: List<Node>,
+    children: List<Node>,
     line: Int = 0,
-) : LayoutNode(emptyMap(), children, line) {
-    override val tag: String get() = branchTag
-}
+) : LayoutNode(null, children, line)
 
-class IfNode(
-    attributes: Map<String, String>,
-    val test: BindingExpression,
-    val thenBranch: BranchNode,
-    val elseBranch: BranchNode?,
-    line: Int = 0,
-) : Node(attributes, line) {
-    override val tag: String get() = "If"
-
-    /** 供遍历 / 校验使用。 */
-    override val children: List<Node> get() = listOfNotNull(thenBranch, elseBranch)
-}
-
-class ForeachNode(
-    attributes: Map<String, String>,
-    val items: BindingExpression,
-    val itemName: String,
-    val indexName: String?,
-    val keyAttribute: String?,
-    override val children: List<Node>,
-    line: Int = 0,
-) : LayoutNode(attributes, children, line) {
-    override val tag: String get() = "Foreach"
-}
+/**
+ * 自动 id。用随机串而不是自增计数器，是为了让两棵并行解析的节点树（两个界面实例）
+ * 不会撞号；同时带 `auto_` 前缀，便于和用户显式声明的 id 区分。
+ */
+private fun nextAutoId(): String = "auto_" + Random.nextLong().toULong().toString(16)

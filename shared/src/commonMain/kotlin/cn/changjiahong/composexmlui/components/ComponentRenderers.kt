@@ -19,40 +19,37 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
-import cn.changjiahong.composexmlui.binding.BindingExpression
 import cn.changjiahong.composexmlui.core.XmlUiException
 import cn.changjiahong.composexmlui.node.ButtonNode
 import cn.changjiahong.composexmlui.node.SelectNode
 import cn.changjiahong.composexmlui.node.TextFieldNode
 import cn.changjiahong.composexmlui.node.TextNode
-import cn.changjiahong.composexmlui.renderer.Attrs
 import cn.changjiahong.composexmlui.renderer.LocalActionRegistry
-import cn.changjiahong.composexmlui.renderer.LocalStoreOwner
 import cn.changjiahong.composexmlui.renderer.NodeRenderer
+import cn.changjiahong.composexmlui.renderer.asState
 import cn.changjiahong.composexmlui.renderer.containerModifier
+import cn.changjiahong.composexmlui.renderer.current
 import cn.changjiahong.composexmlui.store.ObservableData
 import cn.changjiahong.composexmlui.store.ObservableList
 import cn.changjiahong.composexmlui.store.ObservableMap
 
 /**
- * Text：只读绑定。`resolveString` 通过 Store 的可观察状态读取，
- * 因此字段变化时 Compose 会精确地只重组依赖该字段的文本。
+ * Text：只读绑定。属性通过 [current] 读值，读 state 即订阅，
+ * 因此字段变化时 Compose 会精确地只重组依赖该字段的组件。
  */
 class TextNodeRenderer : NodeRenderer<TextNode> {
 
     @Composable
     override fun Render(node: TextNode) {
-        val owner = LocalStoreOwner.current
-        val text = owner.readString(node.expression("value"))
-        val maxLines = Attrs.int(node, "maxLines") ?: Int.MAX_VALUE
+        val maxLines = node.maxLines?.current() ?: Int.MAX_VALUE
 
         Text(
-            text = text,
+            text = node.value.current() ?: "",
             modifier = node.containerModifier(),
-            color = Attrs.color(node, "color") ?: Color.Unspecified,
-            fontSize = Attrs.fontSize(node, "fontSize") ?: TextUnit.Unspecified,
-            fontWeight = Attrs.fontWeight(node, "fontWeight"),
-            textAlign = Attrs.textAlign(node, "textAlign"),
+            color = node.color?.current() ?: Color.Unspecified,
+            fontSize = node.fontSize?.current() ?: TextUnit.Unspecified,
+            fontWeight = node.fontWeight?.current(),
+            textAlign = node.textAlign?.current(),
             maxLines = maxLines,
             overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis,
         )
@@ -64,45 +61,37 @@ class ButtonNodeRenderer : NodeRenderer<ButtonNode> {
 
     @Composable
     override fun Render(node: ButtonNode) {
-        val owner = LocalStoreOwner.current
         val actions = LocalActionRegistry.current
-        val label = owner.readString(node.expression("text"))
 
         Button(
             onClick = { node.action?.let { actions.invoke(it.name) } },
             modifier = node.containerModifier(),
-            enabled = Attrs.bool(node, "enabled") ?: true,
+            enabled = node.enabled?.current() ?: true,
         ) {
-            Text(label)
+            Text(node.text.current() ?: "")
         }
     }
 }
 
 /**
  * TextField：双向绑定。
- * 读取走统一绑定读取（订阅字段），写入走 `owner.write`（写回原始数据路径）。
+ * [asState] 已经把当前作用域捕获进句柄，读订阅、写回数据都不再需要显式拿 owner。
  */
 class TextFieldNodeRenderer : NodeRenderer<TextFieldNode> {
 
     @Composable
     override fun Render(node: TextFieldNode) {
-        val owner = LocalStoreOwner.current
-        val valueExpression = node.expressionOrNull("value")
-        val current = valueExpression?.let { ObservableData.asString(owner.read(it)) } ?: ""
-        val labelText = node.expressionOrNull("label")?.let { owner.readString(it) }
-        val placeholderText = node.expressionOrNull("placeholder")?.let { owner.readString(it) }
+        val value = node.value.asState()
+        val labelText = node.label?.current()
+        val placeholderText = node.placeholder?.current()
 
         OutlinedTextField(
-            value = current,
-            onValueChange = { newValue ->
-                if (valueExpression is BindingExpression.Path) {
-                    owner.write(valueExpression.path, newValue)
-                }
-            },
+            value = value.value ?: "",
+            onValueChange = { newValue -> value.value = newValue },
             modifier = node.containerModifier(),
-            enabled = Attrs.bool(node, "enabled") ?: true,
-            readOnly = Attrs.bool(node, "readOnly") ?: false,
-            singleLine = Attrs.bool(node, "singleLine") ?: true,
+            enabled = node.enabled?.current() ?: true,
+            readOnly = node.readOnly?.current() ?: false,
+            singleLine = node.singleLine?.current() ?: true,
             label = if (labelText != null) {
                 { Text(labelText) }
             } else null,
@@ -115,24 +104,25 @@ class TextFieldNodeRenderer : NodeRenderer<TextFieldNode> {
 
 /**
  * Select：`options` 支持 List<Map>（label/value）或 List<String>。
- * 选中后把 option.value 写回 `value` 绑定路径。
+ * 选中后把 option.value 写回 `value` 的绑定路径。
+ *
+ * `value` / `options` 保留原始类型（不转 String）：`"1"` 与 `1` 在选中判断上不等价。
  */
 class SelectNodeRenderer : NodeRenderer<SelectNode> {
 
     @Composable
     override fun Render(node: SelectNode) {
-        val owner = LocalStoreOwner.current
         var expanded by remember { mutableStateOf(false) }
+        val target = node.value?.asState()
 
-        val options = SelectOptions.parse(owner.read(node.expression("options")))
-        val valueExpression = node.expressionOrNull("value")
-        val currentValue = valueExpression?.let { ObservableData.unwrap(owner.read(it)) }
+        val options = SelectOptions.parse(node.options.current())
+        val currentValue = target?.value
         val selected = options.firstOrNull { it.value == currentValue }
             ?: options.firstOrNull {
                 ObservableData.asString(it.value) == ObservableData.asString(currentValue)
             }
-        val labelText = node.expressionOrNull("label")?.let { owner.readString(it) }
-        val placeholder = node.raw("placeholder") ?: "请选择"
+        val labelText = node.label?.current()
+        val placeholder = node.placeholder?.current() ?: "请选择"
 
         Column(modifier = node.containerModifier()) {
             if (labelText != null) {
@@ -160,9 +150,7 @@ class SelectNodeRenderer : NodeRenderer<SelectNode> {
                             text = { Text(option.label) },
                             onClick = {
                                 expanded = false
-                                if (valueExpression is BindingExpression.Path) {
-                                    owner.write(valueExpression.path, option.value)
-                                }
+                                target?.let { it.value = option.value }
                             },
                         )
                     }
