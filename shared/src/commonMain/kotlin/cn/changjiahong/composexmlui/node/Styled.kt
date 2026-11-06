@@ -23,30 +23,47 @@ sealed interface Dimension {
  *
  * 这一点和「所有节点共有一组属性」的模型不同：`<If>` / `<Foreach>` 没有实现它，
  * 所以在它们上面写 `padding` 会被解析期直接拒绝，而不是「接受但无效果」。
+ *
+ * 实现方式不是接口委托（`Styled by BoxStyle(context)`），而是暴露一个 [style] 对象、
+ * 由接口提供默认 getter：委托只能在主构造的父类型列表里求值，会逼着每个节点把
+ * `context` 留在主构造里，而节点的属性值需要能被直接传入。多一层取值没有额外开销。
  */
 interface Styled {
-    val width: AttrValue<Dimension>?
-    val height: AttrValue<Dimension>?
-    val padding: AttrValue<Dp>?
-    val paddingHorizontal: AttrValue<Dp>?
-    val paddingVertical: AttrValue<Dp>?
-    val backgroundColor: AttrValue<Color>?
+
+    val style: BoxStyle
+
+    val width: AttrValue<Dimension>? get() = style.width
+    val height: AttrValue<Dimension>? get() = style.height
+    val padding: AttrValue<Dp>? get() = style.padding
+    val paddingHorizontal: AttrValue<Dp>? get() = style.paddingHorizontal
+    val paddingVertical: AttrValue<Dp>? get() = style.paddingVertical
+    val backgroundColor: AttrValue<Color>? get() = style.backgroundColor
 }
 
 /**
- * [Styled] 的标准实现：一次性读取 6 个样式属性。
+ * [Styled] 的标准实现：6 个样式属性的容器。
  *
- * 用法是委托，节点里只多一段 `Styled by BoxStyle(context)`，不需要逐个声明字段：
- * ```
- * class TextNode(context: NodeContext) : Node(context), Styled by BoxStyle(context)
- * ```
- * 委托在构造期只执行一次，属性名因此只在这一个文件里出现。
+ * 两种构造方式对应两种节点构造方式：
+ * - `BoxStyle(context)`：从 XML 读（属性名因此只在这一个文件里出现）；
+ * - `BoxStyle(width = ..., padding = ...)`：代码里直接给值。
  */
-class BoxStyle(context: NodeContext) : Styled {
-    override val width: AttrValue<Dimension>? = context.attr("width")
-    override val height: AttrValue<Dimension>? = context.attr("height")
-    override val padding: AttrValue<Dp>? = context.attr("padding")
-    override val paddingHorizontal: AttrValue<Dp>? = context.attr("paddingHorizontal")
-    override val paddingVertical: AttrValue<Dp>? = context.attr("paddingVertical")
-    override val backgroundColor: AttrValue<Color>? = context.attr("backgroundColor")
+class BoxStyle(
+    override val width: AttrValue<Dimension>? = null,
+    override val height: AttrValue<Dimension>? = null,
+    override val padding: AttrValue<Dp>? = null,
+    override val paddingHorizontal: AttrValue<Dp>? = null,
+    override val paddingVertical: AttrValue<Dp>? = null,
+    override val backgroundColor: AttrValue<Color>? = null,
+) : Styled {
+
+    override val style: BoxStyle get() = this
+
+    constructor(context: NodeContext) : this(
+        width = context.attr("width"),
+        height = context.attr("height"),
+        padding = context.attr("padding"),
+        paddingHorizontal = context.attr("paddingHorizontal"),
+        paddingVertical = context.attr("paddingVertical"),
+        backgroundColor = context.attr("backgroundColor"),
+    )
 }

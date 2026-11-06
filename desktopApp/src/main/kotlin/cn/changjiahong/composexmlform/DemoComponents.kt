@@ -16,6 +16,7 @@ import cn.changjiahong.composexmlui.node.AttrValue
 import cn.changjiahong.composexmlui.node.BoxStyle
 import cn.changjiahong.composexmlui.node.Node
 import cn.changjiahong.composexmlui.node.Styled
+import cn.changjiahong.composexmlui.node.VarAttr
 import cn.changjiahong.composexmlui.parser.EngineRegistry
 import cn.changjiahong.composexmlui.parser.NodeContext
 import cn.changjiahong.composexmlui.renderer.NodeRenderer
@@ -27,9 +28,9 @@ import cn.changjiahong.composexmlui.renderer.current
  * 自定义组件示例：新增组件不需要改动引擎核心。
  *
  * 三步：
- * 1. 定义 Node：属性在初始化处直接从 [NodeContext] 读，类型由 `AttrValue<T>` 决定，
- *    **不需要传转换器**；需要尺寸 / padding 就 `Styled by BoxStyle(context)`。
- * 2. 写 Renderer：只读属性用 `current()`，双向绑定用 `asState()`（读写都不用传 owner）。
+ * 1. 定义 Node：主构造接收显式属性值（`AttrValue<T>` 决定类型），
+ *    另写一个 `(NodeContext)` 次构造把 XML 属性搬进来；需要尺寸 / padding 就实现 [Styled]。
+ * 2. 写 Renderer：继承 [NodeRenderer]，只读属性用 `current()`，双向绑定用 `asState()`。
  * 3. 注册一行：`registry.register(tag, 节点类, 构造引用, 渲染器)`。
  *
  * 继承内置节点同样可行，例如给 `<Text>` 加字间距：
@@ -42,20 +43,31 @@ import cn.changjiahong.composexmlui.renderer.current
  * 若只注册节点、不注册渲染器，会沿用 `TextNode` 的渲染器，
  * 新属性**不会报错但也不生效** —— 这是唯一需要额外注意的地方。
  */
-class RatingBarNode(context: NodeContext) : Node(context), Styled by BoxStyle(context) {
+class RatingBarNode(
+    /** 评分必须写回数据，所以是 [VarAttr]：字面量在解析期就被拒。 */
+    val value: VarAttr<Int>,
+    val max: AttrValue<Int>? = null,
+    val label: AttrValue<String>? = null,
+    val color: AttrValue<Color>? = null,
+    override val style: BoxStyle = BoxStyle(),
+    id: String? = null,
+    line: Int = 0,
+) : Node(id, line), Styled {
 
-    /** 评分必须写回数据，所以要求绑定。 */
-    val value: AttrValue<Int> = context.needWritable("value")
-    val max: AttrValue<Int>? = context.attr("max")
-    val label: AttrValue<String>? = context.attr("label")
-    val color: AttrValue<Color>? = context.attr("color")
-
-    init {
+    constructor(context: NodeContext) : this(
+        value = context.needWritable("value"),
+        max = context.attr("max"),
+        label = context.attr("label"),
+        color = context.attr("color"),
+        style = BoxStyle(context),
+        id = context.id,
+        line = context.line,
+    ) {
         context.ensureNoChildren()
     }
 }
 
-class RatingBarRenderer : NodeRenderer<RatingBarNode> {
+class RatingBarRenderer : NodeRenderer<RatingBarNode>() {
 
     @Composable
     override fun Render(node: RatingBarNode) {

@@ -13,7 +13,6 @@ import cn.changjiahong.composexmlui.node.BoxNode
 import cn.changjiahong.composexmlui.node.ColumnNode
 import cn.changjiahong.composexmlui.node.RowNode
 import cn.changjiahong.composexmlui.renderer.NodeRenderer
-import cn.changjiahong.composexmlui.renderer.RenderNode
 import cn.changjiahong.composexmlui.renderer.choose
 import cn.changjiahong.composexmlui.renderer.containerModifier
 import cn.changjiahong.composexmlui.renderer.current
@@ -24,7 +23,7 @@ import cn.changjiahong.composexmlui.renderer.current
  * 枚举型属性（arrangement / alignment）在节点里声明为 `AttrValue<String>`，
  * 由这里的映射表翻译成 Compose 类型：节点定义不依赖排版 API。
  */
-class ColumnNodeRenderer : NodeRenderer<ColumnNode> {
+class ColumnNodeRenderer : NodeRenderer<ColumnNode>() {
 
     @Composable
     override fun Render(node: ColumnNode) {
@@ -62,12 +61,12 @@ class ColumnNodeRenderer : NodeRenderer<ColumnNode> {
             verticalArrangement = arrangement,
             horizontalAlignment = alignment,
         ) {
-            node.children.forEach { RenderNode(it) }
+            node.children.forEach { RenderChild(it) }
         }
     }
 }
 
-class RowNodeRenderer : NodeRenderer<RowNode> {
+class RowNodeRenderer : NodeRenderer<RowNode>() {
 
     @Composable
     override fun Render(node: RowNode) {
@@ -105,12 +104,12 @@ class RowNodeRenderer : NodeRenderer<RowNode> {
             horizontalArrangement = arrangement,
             verticalAlignment = alignment,
         ) {
-            node.children.forEach { RenderNode(it) }
+            node.children.forEach { RenderChild(it) }
         }
     }
 }
 
-class BoxNodeRenderer : NodeRenderer<BoxNode> {
+class BoxNodeRenderer : NodeRenderer<BoxNode>() {
 
     @Composable
     override fun Render(node: BoxNode) {
@@ -130,7 +129,7 @@ class BoxNodeRenderer : NodeRenderer<BoxNode> {
         )
 
         Box(modifier = node.containerModifier(), contentAlignment = alignment) {
-            node.children.forEach { RenderNode(it) }
+            node.children.forEach { RenderChild(it) }
         }
     }
 }

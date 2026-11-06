@@ -3,6 +3,7 @@ package cn.changjiahong.composexmlui.renderer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import cn.changjiahong.composexmlui.node.AttrValue
+import cn.changjiahong.composexmlui.node.VarAttr
 import cn.changjiahong.composexmlui.store.StoreOwner
 import kotlin.reflect.KProperty
 
@@ -25,6 +26,9 @@ fun <T> AttrValue<T>.get(env: StoreOwner): T? = read(env)
 /**
  * 双向绑定句柄：把当前作用域捕获进来，读写都不再需要显式传 owner。
  *
+ * 只有 [VarAttr] 提供这个方法 —— 只读槽位（[cn.changjiahong.composexmlui.node.ValAttr]）
+ * 在类型上就没有写入口，因此「字面量写回」这类错误不需要在渲染器里兜底。
+ *
  * ```
  * val text = node.value.asState()
  * OutlinedTextField(value = text.value ?: "", onValueChange = { text.value = it })
@@ -36,25 +40,23 @@ fun <T> AttrValue<T>.get(env: StoreOwner): T? = read(env)
  * ```
  *
  * 作用域是在 composition 里读到的，所以 `Foreach` 每一行拿到的句柄各自指向本行的元素；
- * 节点与 [AttrValue] 本身仍然无状态、可跨界面共享。
+ * 节点与属性值本身仍然无状态、可跨界面共享。
  */
 @Composable
-fun <T> AttrValue<T>.asState(): AttrState<T> {
+fun <T> VarAttr<T>.asState(): AttrState<T> {
     val env = LocalStoreOwner.current
     return remember(this, env) { AttrState(this, env) }
 }
 
 class AttrState<T> internal constructor(
-    private val attr: AttrValue<T>,
+    private val attr: VarAttr<T>,
     private val env: StoreOwner,
 ) {
 
-    /** 读：订阅当前绑定的字段；写：直接写回数据源（字面量会报错）。 */
+    /** 读：订阅当前绑定的字段；写：直接写回数据源。 */
     var value: T?
         get() = attr.read(env)
         set(newValue) = attr.write(env, newValue)
-
-    val isWritable: Boolean get() = attr.isWritable
 
     operator fun getValue(thisRef: Any?, property: KProperty<*>): T? = value
 

@@ -38,7 +38,7 @@ class EngineRegistry(
         nodeClass: KClass<T>,
         create: (NodeContext) -> T,
         render: @Composable (T) -> Unit,
-    ) = register(tag, nodeClass, create, object : NodeRenderer<T> {
+    ) = register(tag, nodeClass, create, object : NodeRenderer<T>() {
         @Composable
         override fun Render(node: T) = render(node)
     })

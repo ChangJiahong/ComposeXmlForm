@@ -7,6 +7,8 @@ import cn.changjiahong.composexmlui.node.AttrValue
 import cn.changjiahong.composexmlui.node.Dimension
 import cn.changjiahong.composexmlui.node.Node
 import cn.changjiahong.composexmlui.node.TextNode
+import cn.changjiahong.composexmlui.node.ValAttr
+import cn.changjiahong.composexmlui.node.valAttr
 import cn.changjiahong.composexmlui.parser.EngineRegistry
 import cn.changjiahong.composexmlui.parser.NodeContext
 import cn.changjiahong.composexmlui.renderer.get
@@ -31,7 +33,7 @@ class AttrValueTest {
         registry: EngineRegistry = this.registry,
     ) = DynamicLayoutRuntime(xml, data, emptyMap(), emptyMap(), registry)
 
-    private fun literal(attr: AttrValue<*>?): Any? = attr?.constant
+    private fun literal(attr: AttrValue<*>?): Any? = (attr as? ValAttr<*>)?.constant
 
     // ---------------- 字面量 ----------------
 
@@ -154,6 +156,23 @@ class AttrValueTest {
         assertTrue(error.message!!.contains("{{path}}"), error.message)
     }
 
+    // ---------------- 程序化构造（不经过 XML） ----------------
+
+    @Test
+    fun nodeCanBeBuiltWithoutXml() {
+        val node = TextNode(
+            value = valAttr("你好"),
+            fontSize = valAttr(14.sp),
+            maxLines = valAttr(2),
+        )
+
+        assertEquals("你好", literal(node.value))
+        assertEquals(14.sp, literal(node.fontSize))
+        assertEquals(2, literal(node.maxLines))
+        // id 由节点自己生成，不依赖解析器
+        assertTrue(node.id.startsWith("auto_"), node.id)
+    }
+
     // ---------------- 结构性约束 ----------------
 
     @Test
@@ -179,7 +198,7 @@ class AttrValueTest {
 
 private class Person(val name: String)
 
-private class PersonNode(context: NodeContext) : Node(context) {
+private class PersonNode(context: NodeContext) : Node(context.id, context.line) {
     val person: AttrValue<Person> = context.need("value")
 }
 

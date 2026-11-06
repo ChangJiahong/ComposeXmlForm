@@ -8,27 +8,69 @@ import cn.changjiahong.composexmlui.parser.NodeContext
  *
  * 枚举型属性（arrangement / alignment）声明成 `AttrValue<String>`，
  * 字符串 → Compose 枚举的映射留在渲染器：节点定义不依赖排版 API。
+ *
+ * 和叶子节点一样有「显式属性值」与「从 XML 读」两个构造入口。
  */
-open class ColumnNode(context: NodeContext) : LayoutNode(context, context.children),
-    Styled by BoxStyle(context) {
 
-    val scroll: AttrValue<Boolean>? = context.attr("scroll")
-    val spacing: AttrValue<Dp>? = context.attr("spacing")
-    val arrangement: AttrValue<String>? = context.attr("arrangement")
-    val horizontalAlignment: AttrValue<String>? = context.attr("horizontalAlignment")
+open class ColumnNode(
+    children: List<Node> = emptyList(),
+    val scroll: AttrValue<Boolean>? = null,
+    val spacing: AttrValue<Dp>? = null,
+    val arrangement: AttrValue<String>? = null,
+    val horizontalAlignment: AttrValue<String>? = null,
+    override val style: BoxStyle = BoxStyle(),
+    id: String? = null,
+    line: Int = 0,
+) : LayoutNode(children, id, line), Styled {
+
+    constructor(context: NodeContext) : this(
+        children = context.children,
+        scroll = context.attr("scroll"),
+        spacing = context.attr("spacing"),
+        arrangement = context.attr("arrangement"),
+        horizontalAlignment = context.attr("horizontalAlignment"),
+        style = BoxStyle(context),
+        id = context.id,
+        line = context.line,
+    )
 }
 
-open class RowNode(context: NodeContext) : LayoutNode(context, context.children),
-    Styled by BoxStyle(context) {
+open class RowNode(
+    children: List<Node> = emptyList(),
+    val scroll: AttrValue<Boolean>? = null,
+    val spacing: AttrValue<Dp>? = null,
+    val arrangement: AttrValue<String>? = null,
+    val verticalAlignment: AttrValue<String>? = null,
+    override val style: BoxStyle = BoxStyle(),
+    id: String? = null,
+    line: Int = 0,
+) : LayoutNode(children, id, line), Styled {
 
-    val scroll: AttrValue<Boolean>? = context.attr("scroll")
-    val spacing: AttrValue<Dp>? = context.attr("spacing")
-    val arrangement: AttrValue<String>? = context.attr("arrangement")
-    val verticalAlignment: AttrValue<String>? = context.attr("verticalAlignment")
+    constructor(context: NodeContext) : this(
+        children = context.children,
+        scroll = context.attr("scroll"),
+        spacing = context.attr("spacing"),
+        arrangement = context.attr("arrangement"),
+        verticalAlignment = context.attr("verticalAlignment"),
+        style = BoxStyle(context),
+        id = context.id,
+        line = context.line,
+    )
 }
 
-open class BoxNode(context: NodeContext) : LayoutNode(context, context.children),
-    Styled by BoxStyle(context) {
+open class BoxNode(
+    children: List<Node> = emptyList(),
+    val contentAlignment: AttrValue<String>? = null,
+    override val style: BoxStyle = BoxStyle(),
+    id: String? = null,
+    line: Int = 0,
+) : LayoutNode(children, id, line), Styled {
 
-    val contentAlignment: AttrValue<String>? = context.attr("contentAlignment")
+    constructor(context: NodeContext) : this(
+        children = context.children,
+        contentAlignment = context.attr("contentAlignment"),
+        style = BoxStyle(context),
+        id = context.id,
+        line = context.line,
+    )
 }

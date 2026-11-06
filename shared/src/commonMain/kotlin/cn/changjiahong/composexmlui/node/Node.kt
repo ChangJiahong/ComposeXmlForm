@@ -1,6 +1,5 @@
 package cn.changjiahong.composexmlui.node
 
-import cn.changjiahong.composexmlui.parser.NodeContext
 import kotlin.random.Random
 
 /**
@@ -11,14 +10,17 @@ import kotlin.random.Random
  *   拼错属性名是编译错误，必填属性漏传也是编译错误。
  * - 不持有渲染逻辑，因此节点树可以独立解析、校验、缓存与复用；
  *   渲染由 [cn.changjiahong.composexmlui.renderer.NodeRenderer] 按类型分派。
- * - 属性值可以是字面量或绑定表达式（[AttrValue]），但节点自身始终不可变。
+ * - 属性值只读用 [AttrValue]，可写回用 [VarAttr]，节点自身始终不可变。
  *
- * 基类只保留两个字段：[id]（节点身份）与 [line]（解析期错误定位）。
+ * 基类只保留两个字段：[id]（节点身份）与 [line]（解析期错误定位），
+ * **不认识解析器** —— 没有 `NodeContext` 参数，这一层因此可以被纯代码构造
+ * （测试、IDE 预览、程序化拼界面）。从 XML 构造的路径由各节点的次构造提供。
+ *
  * 样式类属性不进基类 —— 需要它们的节点自己实现 [Styled]。
  */
-abstract class Node protected constructor(
-    id: String?,
-    val line: Int,
+abstract class Node(
+    id: String? = null,
+    val line: Int = 0,
 ) {
 
     /**
@@ -29,28 +31,19 @@ abstract class Node protected constructor(
      */
     val id: String = id ?: nextAutoId()
 
-    /** 从解析上下文构建：id 与行号都来自 XML。 */
-    protected constructor(context: NodeContext) : this(context.optional("id"), context.line)
-
-    /** 没有 XML 来源的节点（`<Then>` / `<Else>`）用。 */
-    protected constructor(line: Int) : this(null, line)
-
     open val children: List<Node> get() = emptyList()
 
     override fun toString(): String = "<${this::class.simpleName} #$id>"
 }
 
 /** 布局节点：持有 children。真正的容器创建在渲染器里完成。 */
-abstract class LayoutNode protected constructor(
-    id: String?,
+abstract class LayoutNode(
     children: List<Node>,
-    line: Int,
+    id: String? = null,
+    line: Int = 0,
 ) : Node(id, line) {
 
     override val children: List<Node> = children
-
-    protected constructor(context: NodeContext, children: List<Node>) :
-        this(context.optional("id"), children, context.line)
 }
 
 /**
@@ -61,7 +54,7 @@ class BranchNode(
     val branchTag: String,
     children: List<Node>,
     line: Int = 0,
-) : LayoutNode(null, children, line)
+) : LayoutNode(children, line = line)
 
 /**
  * 自动 id。用随机串而不是自增计数器，是为了让两棵并行解析的节点树（两个界面实例）

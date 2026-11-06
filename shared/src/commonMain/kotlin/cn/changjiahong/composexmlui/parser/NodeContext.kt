@@ -10,6 +10,8 @@ import cn.changjiahong.composexmlui.node.AttrType
 import cn.changjiahong.composexmlui.node.AttrValue
 import cn.changjiahong.composexmlui.node.BranchNode
 import cn.changjiahong.composexmlui.node.Node
+import cn.changjiahong.composexmlui.node.ValAttr
+import cn.changjiahong.composexmlui.node.VarAttr
 import cn.changjiahong.composexmlui.node.attrType
 
 /**
@@ -36,6 +38,18 @@ class NodeContext internal constructor(
     /** 这个组件声明过的属性名（读取时登记，与 XML 是否写了无关）。 */
     @PublishedApi
     internal val known = LinkedHashSet<String>()
+
+    /**
+     * XML 里声明的 id；没写就是 null（节点会自己生成）。
+     *
+     * `id` 是框架级属性，每个节点都要读，所以在这里一次性登记进白名单 ——
+     * 节点作者不需要为它写任何代码，也不会因为漏读而被报「不支持的属性 'id'」。
+     */
+    val id: String? = attributes["id"]
+
+    init {
+        known += "id"
+    }
 
     /** 递归构建子节点（懒加载：叶子节点不会触发 children 构建）。 */
     val children: List<Node> by lazy { childSpecs.map { registry.buildNode(it) } }
@@ -84,11 +98,12 @@ class NodeContext internal constructor(
 
     /**
      * 读取一个必须可写回的属性（双向绑定）：字面量直接报错，因为字面量没有路径。
+     * 返回类型是 [VarAttr]，渲染器拿到就能直接写，不需要再判断「能不能写」。
      */
-    inline fun <reified T : Any> writable(name: String): AttrValue<T>? =
+    inline fun <reified T : Any> writable(name: String): VarAttr<T>? =
         writableOf(name, attrType<T>())
 
-    inline fun <reified T : Any> needWritable(name: String): AttrValue<T> =
+    inline fun <reified T : Any> needWritable(name: String): VarAttr<T> =
         writable<T>(name) ?: fail("缺少必需属性 '$name'", name)
 
     @PublishedApi
@@ -97,18 +112,21 @@ class NodeContext internal constructor(
         val raw = attributes[name] ?: return null
         val site = AttrSite(tag, name, line)
         return when (val expression = parseExpression(name, raw)) {
-            is BindingExpression.Literal -> AttrValue(AttrSource.Const(expression.raw), type, site)
-            is BindingExpression.Path -> AttrValue(AttrSource.Var(expression.path), type, site)
+            is BindingExpression.Literal -> ValAttr(AttrSource.Const(expression.raw), type, site)
+            is BindingExpression.Path -> ValAttr(AttrSource.Var(expression.path), type, site)
         }
     }
 
     @PublishedApi
-    internal fun <T> writableOf(name: String, type: AttrType<T>): AttrValue<T>? {
-        val attr = attrOf(name, type) ?: return null
-        if (!attr.isWritable) {
+    internal fun <T> writableOf(name: String, type: AttrType<T>): VarAttr<T>? {
+        known += name
+        val raw = attributes[name] ?: return null
+        val site = AttrSite(tag, name, line)
+        val expression = parseExpression(name, raw)
+        if (expression !is BindingExpression.Path) {
             fail("属性 '$name' 必须是绑定表达式，例如 $name=\"{{value}}\"（字面量无法写回数据）", name)
         }
-        return attr
+        return VarAttr(expression.path, type, site)
     }
 
     // ---------------- 子节点 ----------------

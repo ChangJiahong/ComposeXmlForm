@@ -10,7 +10,6 @@ import cn.changjiahong.composexmlui.node.ForeachNode
 import cn.changjiahong.composexmlui.node.IfNode
 import cn.changjiahong.composexmlui.renderer.LocalStoreOwner
 import cn.changjiahong.composexmlui.renderer.NodeRenderer
-import cn.changjiahong.composexmlui.renderer.RenderNode
 import cn.changjiahong.composexmlui.renderer.current
 import cn.changjiahong.composexmlui.store.ObservableData
 import cn.changjiahong.composexmlui.store.ObservableList
@@ -24,13 +23,13 @@ import cn.changjiahong.composexmlui.store.StoreOwner
  *
  * 第一版采用「显示 / 移除」语义：分支切换后，被移除分支的临时 Compose 状态不保留。
  */
-class IfNodeRenderer : NodeRenderer<IfNode> {
+class IfNodeRenderer : NodeRenderer<IfNode>() {
 
     @Composable
     override fun Render(node: IfNode) {
         val matched = node.test.current() ?: false
         val branch = if (matched) node.thenBranch else node.elseBranch
-        branch?.children?.forEach { child -> RenderNode(child) }
+        branch?.children?.forEach { child -> RenderChild(child) }
     }
 }
 
@@ -43,7 +42,7 @@ class IfNodeRenderer : NodeRenderer<IfNode> {
  * 2. 使用 `key` + `remember` 维持元素身份：列表增删 / 排序时组件状态跟随数据项而不是位置。
  * 3. 列表结构由 SnapshotStateList 订阅：只有增删改顺序会触发循环重组。
  */
-class ForeachNodeRenderer : NodeRenderer<ForeachNode> {
+class ForeachNodeRenderer : NodeRenderer<ForeachNode>() {
 
     @Composable
     override fun Render(node: ForeachNode) {
@@ -75,7 +74,7 @@ class ForeachNodeRenderer : NodeRenderer<ForeachNode> {
                     SideEffect { scope?.putVar(node.indexName, index) }
                 }
                 CompositionLocalProvider(LocalStoreOwner provides childOwner) {
-                    node.children.forEach { child -> RenderNode(child) }
+                    node.children.forEach { child -> RenderChild(child) }
                 }
             }
         }

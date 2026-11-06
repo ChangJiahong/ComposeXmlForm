@@ -37,7 +37,7 @@ import cn.changjiahong.composexmlui.store.ObservableMap
  * Text：只读绑定。属性通过 [current] 读值，读 state 即订阅，
  * 因此字段变化时 Compose 会精确地只重组依赖该字段的组件。
  */
-class TextNodeRenderer : NodeRenderer<TextNode> {
+class TextNodeRenderer : NodeRenderer<TextNode>() {
 
     @Composable
     override fun Render(node: TextNode) {
@@ -57,7 +57,7 @@ class TextNodeRenderer : NodeRenderer<TextNode> {
 }
 
 /** Button：点击时调用注册表里的无参动作。 */
-class ButtonNodeRenderer : NodeRenderer<ButtonNode> {
+class ButtonNodeRenderer : NodeRenderer<ButtonNode>() {
 
     @Composable
     override fun Render(node: ButtonNode) {
@@ -77,7 +77,7 @@ class ButtonNodeRenderer : NodeRenderer<ButtonNode> {
  * TextField：双向绑定。
  * [asState] 已经把当前作用域捕获进句柄，读订阅、写回数据都不再需要显式拿 owner。
  */
-class TextFieldNodeRenderer : NodeRenderer<TextFieldNode> {
+class TextFieldNodeRenderer : NodeRenderer<TextFieldNode>() {
 
     @Composable
     override fun Render(node: TextFieldNode) {
@@ -108,7 +108,7 @@ class TextFieldNodeRenderer : NodeRenderer<TextFieldNode> {
  *
  * `value` / `options` 保留原始类型（不转 String）：`"1"` 与 `1` 在选中判断上不等价。
  */
-class SelectNodeRenderer : NodeRenderer<SelectNode> {
+class SelectNodeRenderer : NodeRenderer<SelectNode>() {
 
     @Composable
     override fun Render(node: SelectNode) {
