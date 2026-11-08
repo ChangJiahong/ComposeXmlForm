@@ -20,11 +20,11 @@ dependencies {
 }
 
 android {
-    namespace = "cn.changjiahong.composexmlform"
+    namespace = "cn.changjiahong.sample"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "cn.changjiahong.composexmlform"
+        applicationId = "cn.changjiahong.sample"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1

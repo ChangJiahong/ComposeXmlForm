@@ -1,4 +1,4 @@
-package cn.changjiahong.composexmlform
+package cn.changjiahong.sample
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -29,11 +29,13 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import cn.changjiahong.composexmlui.ComposeXmlUi
-import cn.changjiahong.composexmlui.api.BindableData
-import cn.changjiahong.composexmlui.api.DynamicLayout
-import cn.changjiahong.composexmlui.core.JsonCodec
-import cn.changjiahong.composexmlui.runtime.DynamicLayoutRuntime
+import cn.changjiahong.composexmlform.ComposeXmlForm
+import cn.changjiahong.composexmlform.api.BindableData
+import cn.changjiahong.composexmlform.api.DynamicLayout
+import cn.changjiahong.composexmlform.api.actions
+import cn.changjiahong.composexmlform.api.install
+import cn.changjiahong.composexmlform.core.JsonCodec
+import cn.changjiahong.composexmlform.runtime.DynamicLayoutRuntime
 
 private val SAMPLE_XML = """
 <Column scroll="true" padding="20" spacing="14" width="fill">
@@ -98,28 +100,32 @@ private var contactSeq = 10
  */
 @Composable
 fun DevApp() {
-    val registry = remember { ComposeXmlUi.createRegistry().also { DemoComponents.register(it) } }
+    val registry = remember { ComposeXmlForm.createRegistry { install(DemoComponents) } }
 
     var xmlText by remember { mutableStateOf(SAMPLE_XML) }
 
     // 业务数据由调用方持有：改 XML 只会重建运行时，用户已经填进去的内容不会丢。
-    val formData = remember { BindableData(INITIAL_DATA) }
+    val formData = remember { BindableData.of(INITIAL_DATA) }
 
     // 订阅整表快照：输入框里的每一次修改都能在这里看到（内部写回也走同一份状态）。
     // 真实业务里如果表单很大，逐字段用 formData.get("...") 读更划算，asState 会重建整份快照。
     val snapshot by formData.asState()
 
-    val actions = remember {
-        mapOf<String, () -> Unit>(
-            "submit" to { println("[demo] submit -> ${formData.getJson()}") },
-            "login" to { formData.set("isLogin", true) },
-            "logout" to { formData.set("isLogin", false) },
-        )
+    // 动作用 DSL 声明：名字写错、重复注册都是构建期报错，而不是点击时静默无事发生。
+    // handler 是 suspend 的，拿得到 ActionScope.data —— 不需要从闭包里捕获 formData。
+    val actionSet = remember {
+        actions {
+            on("submit") { println("[demo] submit -> ${data.getJson()}") }
+            on("login") { data.set("isLogin", true) }
+            on("logout") { data.set("isLogin", false) }
+        }
     }
 
     // 渲染前先校验：解析 / 属性 / 结构 / 动作注册，任何错误都以面板形式展示，不炸 composition。
-    val validation = remember(xmlText, registry, actions) {
-        runCatching { DynamicLayoutRuntime(xmlText, INITIAL_DATA, DEMO_CONFIG, actions, registry) }
+    val validation = remember(xmlText, registry, actionSet) {
+        runCatching {
+            DynamicLayoutRuntime(xmlText, formData, DEMO_CONFIG, actionSet, registry)
+        }
     }
     val error = validation.exceptionOrNull()
 
@@ -139,8 +145,7 @@ fun DevApp() {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { xmlText = SAMPLE_XML }) { Text("重置") }
                 Button(onClick = {
-                    formData.appendToList(
-                        "contacts",
+                    formData.list("contacts").add(
                         mapOf(
                             "id" to ++contactSeq,
                             "name" to "新联系人$contactSeq",
@@ -149,8 +154,8 @@ fun DevApp() {
                     )
                 }) { Text("加联系人") }
                 Button(onClick = {
-                    val size = formData.getList("contacts").size
-                    if (size > 0) formData.removeListAt("contacts", size - 1)
+                    val size = formData.list("contacts").size
+                    if (size > 0) formData.list("contacts").removeAt(size - 1)
                 }) { Text("删最后一个") }
             }
         }
@@ -172,7 +177,7 @@ fun DevApp() {
                         xml = xmlText,
                         data = formData,
                         config = DEMO_CONFIG,
-                        actions = actions,
+                        actions = actionSet,
                         modifier = Modifier.fillMaxSize(),
                         registry = registry,
                     )

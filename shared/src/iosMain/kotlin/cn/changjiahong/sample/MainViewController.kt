@@ -1,4 +1,4 @@
-package cn.changjiahong.composexmlform
+package cn.changjiahong.sample
 
 import androidx.compose.ui.window.ComposeUIViewController
 

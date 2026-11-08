@@ -1,9 +1,12 @@
-package cn.changjiahong.composexmlform
+package cn.changjiahong.sample
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.tooling.preview.Preview
-import cn.changjiahong.composexmlui.api.DynamicLayout
+import cn.changjiahong.composexmlform.api.DynamicLayout
+import cn.changjiahong.composexmlform.api.actions
+import cn.changjiahong.composexmlform.api.rememberBindableData
 
 /**
  * 跨平台示例：Android / iOS / Desktop 共用同一份 XML 与数据。
@@ -63,16 +66,20 @@ private fun formConfig(): Map<String, Any?> = mapOf(
 @Composable
 @Preview
 fun App() {
+    val data = rememberBindableData(formData())
+    val actions = remember {
+        actions {
+            on("submit") { println("[ComposeXmlUI] submit") }
+            on("login") { println("[ComposeXmlUI] login") }
+            on("logout") { println("[ComposeXmlUI] logout") }
+        }
+    }
     MaterialTheme {
         DynamicLayout(
             xml = FORM_XML,
-            data = formData(),
+            data = data,
             config = formConfig(),
-            actions = mapOf(
-                "submit" to { println("[ComposeXmlUI] submit") },
-                "login" to { println("[ComposeXmlUI] login") },
-                "logout" to { println("[ComposeXmlUI] logout") },
-            ),
+            actions = actions,
         )
     }
 }

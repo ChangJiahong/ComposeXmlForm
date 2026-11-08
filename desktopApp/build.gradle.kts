@@ -17,11 +17,11 @@ dependencies {
 
 compose.desktop {
     application {
-        mainClass = "cn.changjiahong.composexmlform.MainKt"
+        mainClass = "cn.changjiahong.sample.MainKt"
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "cn.changjiahong.composexmlform"
+            packageName = "cn.changjiahong.sample"
             packageVersion = "1.0.0"
         }
     }
