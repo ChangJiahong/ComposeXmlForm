@@ -7,63 +7,39 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
+// 示例工程：只放「怎么用这个库」，自身不含任何引擎逻辑。
 kotlin {
     listOf(
         iosArm64(),
         iosSimulatorArm64()
     ).forEach { iosTarget ->
         iosTarget.binaries.framework {
+            // 保持 "Shared"：iosApp 的 Swift 代码 import Shared，拆分后无需改动 iOS 工程
             baseName = "Shared"
             isStatic = true
+            // 静态框架会把依赖模块的代码一起链进来（Swift 侧只要能调 MainViewController 就够）。
+            // 若以后要在 Swift 里直接用引擎 API，再打开下面这行：
+            // export(project(":composexmlform"))
         }
     }
     jvm()
     android {
-       namespace = "cn.changjiahong.composexmlform.shared"
-       compileSdk = libs.versions.android.compileSdk.get().toInt()
-       minSdk = libs.versions.android.minSdk.get().toInt()
-       compilerOptions {
-           jvmTarget = JvmTarget.JVM_11
-       }
-       androidResources {
-           enable = true
-       }
-       withHostTest {
-           isIncludeAndroidResources = true
-       }
-       withDeviceTestBuilder {
-           sourceSetTreeName = "test"
-       }.configure {
-           instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-       }
+        // 必须与 androidApp 的 namespace 区分开，否则 manifest 合并会冲突
+        namespace = "cn.changjiahong.sample.shared"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
+        compilerOptions {
+            jvmTarget = JvmTarget.JVM_11
+        }
     }
     sourceSets {
-        androidMain.dependencies {
-            implementation(libs.compose.uiToolingPreview)
-            implementation(libs.compose.uiTooling)
-        }
         commonMain.dependencies {
-            // 引擎作为 UI 库对外暴露 Compose 类型，使用 api 让宿主模块（desktopApp / androidApp）直接可见
-            api(libs.compose.runtime)
-            api(libs.compose.foundation)
-            api(libs.compose.material3)
-            api(libs.compose.ui)
-            // JsonElement 作为 BindableData 的输入格式；只用到 runtime，不需要 serialization 编译器插件
-            api(libs.kotlinx.serializationJson)
-            implementation(libs.compose.components.resources)
+            // api：desktopApp / androidApp 直接消费库里的类型，需要传递可见
+            api(project(":composexmlform"))
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.material3)
+            implementation(libs.compose.ui)
             implementation(libs.compose.uiToolingPreview)
-            implementation(libs.androidx.lifecycle.viewmodelCompose)
-            implementation(libs.androidx.lifecycle.runtimeCompose)
-        }
-        commonTest.dependencies {
-            implementation(libs.kotlin.test)
-        }
-        getByName("androidDeviceTest").dependencies {
-            implementation(libs.androidx.testRunner)
         }
     }
-}
-
-dependencies {
-    androidRuntimeClasspath(libs.compose.uiTooling)
 }
