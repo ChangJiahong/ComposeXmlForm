@@ -1,6 +1,5 @@
 package cn.changjiahong.sample
 
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -12,8 +11,7 @@ fun main() = application {
         title = "ComposeXmlUI 调试台",
         state = rememberWindowState(width = 1280.dp, height = 860.dp),
     ) {
-        MaterialTheme {
-            DevApp()
-        }
+        // 与 Android / iOS 共用同一份测试台：宽窗口下自动变成三栏布局
+        Playground()
     }
 }

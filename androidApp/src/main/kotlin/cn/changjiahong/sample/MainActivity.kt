@@ -13,7 +13,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            App()
+            // 三端统一测试台：宽度 ≥ 840dp 三栏并置，窄屏走单页标签
+            Playground()
         }
     }
 }

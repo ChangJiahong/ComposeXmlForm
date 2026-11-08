@@ -37,6 +37,8 @@ kotlin {
             // api：desktopApp / androidApp 直接消费库里的类型，需要传递可见
             api(project(":composexmlform"))
             implementation(libs.compose.runtime)
+            // 测试台的 HorizontalPager / 基础布局来自 foundation
+            implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)
             implementation(libs.compose.uiToolingPreview)
