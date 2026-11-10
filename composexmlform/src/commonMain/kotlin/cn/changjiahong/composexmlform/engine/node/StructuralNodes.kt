@@ -1,6 +1,7 @@
 package cn.changjiahong.composexmlform.engine.node
 
 import cn.changjiahong.composexmlform.engine.value.AnyAdapter
+import cn.changjiahong.composexmlform.engine.value.Function
 import cn.changjiahong.composexmlform.engine.value.Value
 
 /**
@@ -65,6 +66,32 @@ class ForeachNode(
 ) : ContainerNode(id, children)
 
 /**
+ * `<Fn name="addContact" body="@{ … }">…</Fn>`：**在子树里绑定一个函数**。
+ *
+ * 和 `Foreach` 的 `item` 完全同构 —— [name] 是结构属性，它引入的名字只在这棵子树里
+ * 有效；区别只是绑上去的值是函数，不是数据。
+ *
+ * ```xml
+ * <Fn name="addContact" body="@{ data.contacts.append({ id: 4, name: '新' }) }">
+ *     <Button text="添加" onClick="@{ addContact() }"/>
+ * </Fn>
+ * ```
+ *
+ * 为什么是**容器**而不是「同级声明」：同级声明要靠「先渲染的兄弟给后面的留名字」，
+ * 一旦重排或包进 `If` 就失效；容器把它变成作用域问题，和 `Foreach` 同一套机制
+ * （`WithEnv` + 解析期作用域栈），顺序无关。
+ *
+ * [body] 只接受 `@{…}`：函数体是**行为**，不是「求值得到的东西」，所以不像普通属性
+ * 那样支持 `{{path}}` / `{expr}` —— 那两种在属性被读取时就已经执行完了。
+ */
+class FnNode(
+    id: String,
+    val name: AttrSlot<String>,
+    val body: AttrSlot<Function>,
+    children: List<Node>,
+) : ContainerNode(id, children)
+
+/**
  * 内置结构节点的声明表。
  *
  * 宿主把它 `plus` 进自己的 [NodeTypes] 即可；`data` / `action` 之外不需要任何额外配置。
@@ -85,6 +112,12 @@ object StructuralTypes {
 
     /** 元素对象里用作行 key 的字段名。没写就用下标。 */
     val KeyBy: AttrDef<String> = Attr.string("key")
+
+    /** `<Fn name="…">` 的函数名，裸标识符、只在本子树可见。 */
+    val FnName: AttrDef<String> = Attr.string("name", required = true, structural = true)
+
+    /** `<Fn body="@{…}">` 的函数体。 */
+    val FnBody: AttrDef<Function> = Attr.func("body", required = true)
 
     val If: NodeType = NodeType(
         tag = "If",
@@ -122,6 +155,19 @@ object StructuralTypes {
         )
     }
 
-    /** 四个结构节点。宿主用 `StructuralTypes.All plus 自己的类型`。 */
-    val All: NodeTypes = NodeTypes.of(If, Then, Else, Foreach)
+    val Fn: NodeType = NodeType(
+        tag = "Fn",
+        attributes = listOf(FnName, FnBody),
+        childRule = ChildRule.Any,
+    ) { id, attrs, children ->
+        FnNode(
+            id = id,
+            name = attrs.attr(FnName),
+            body = attrs.attr(FnBody),
+            children = children,
+        )
+    }
+
+    /** 五个结构节点。宿主用 `StructuralTypes.All plus 自己的类型`。 */
+    val All: NodeTypes = NodeTypes.of(If, Then, Else, Foreach, Fn)
 }
