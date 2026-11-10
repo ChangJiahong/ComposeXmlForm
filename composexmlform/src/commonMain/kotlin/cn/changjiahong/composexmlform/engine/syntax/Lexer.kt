@@ -168,6 +168,7 @@ class Lexer(
             ']' -> token(TokenKind.RBracket, "]")
             '{' -> token(TokenKind.LBrace, "{")
             '}' -> token(TokenKind.RBrace, "}")
+            '@' -> token(TokenKind.At, "@")
             ';' -> token(TokenKind.Semicolon, ";")
             '+' -> token(TokenKind.Plus, "+")
             '-' -> if (peek() == '>') {

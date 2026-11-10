@@ -297,8 +297,16 @@ class SyntaxTest {
 
     @Test
     fun awaitRequiresCall() {
-        val await = assertIs<Stmt.Await>(parseStatements("await http.get(url)").single())
+        val statement = parseStatements("await http.get(url)").single()
+        val await = assertIs<Expr.Await>(assertIs<Stmt.ExprStmt>(statement).expr)
         assertEquals("get", assertIs<Expr.Get>(await.call.callee).name)
+    }
+
+    @Test
+    fun awaitCanBeTheRightHandSideOfADeclaration() {
+        // 语句节点装不进 `VarDecl.init`，所以 await 必须是表达式（I-9）
+        val decl = assertIs<Stmt.VarDecl>(parseStatements("val r = await http.get(url)").single())
+        assertIs<Expr.Await>(decl.init)
     }
 
     @Test

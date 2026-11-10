@@ -73,6 +73,33 @@ private fun renormalize(value: Value, frozen: Boolean): Value = when (value) {
     else -> value
 }
 
+// ── 深拷贝 ────────────────────────────────────────────────────
+
+/**
+ * 独立副本。`copy(x)` / `new(obj)` 用它，也是「改草稿不动原数据」的实现方式。
+ *
+ * 与 [normalize] 的只读→可写拷贝有两处**有意不同**：
+ * 1. 这里会保留 `Function` 成员（对象带方法时，副本也该带）；
+ * 2. 这里不因 `frozen` 而跳过 —— 冻结对象是为了保护原数据，不是为了不让复制。
+ *
+ * 标量与引用语义对象（[HostObject]）原样返回：前者不可变，后者的身份本身有意义。
+ */
+fun deepCopy(value: Value, frozen: Boolean = false): Value = when (value) {
+    is DataObject -> {
+        val target = MutableDataObject(frozen)
+        for (name in value.keys()) target.setRaw(name, deepCopy(value.member(name), frozen))
+        target
+    }
+
+    is DataArray -> {
+        val target = DataArray(frozen)
+        for (element in value.elements) target.appendRaw(deepCopy(element, frozen))
+        target
+    }
+
+    else -> value
+}
+
 // ── 相等 ──────────────────────────────────────────────────────
 
 /**

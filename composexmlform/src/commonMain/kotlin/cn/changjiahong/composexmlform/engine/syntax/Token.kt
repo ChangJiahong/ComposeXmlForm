@@ -39,6 +39,9 @@ enum class TokenKind {
     RBrace,
     Arrow,
 
+    /** `@`：函数字面量的前缀（`@{x -> …}`）。属性里的 `@{}` 由 AttrScanner 剥离，脚本里由解析器处理。 */
+    At,
+
     /** 语句分隔符。XML 属性里换行按空白处理，多条语句只能靠它分隔。 */
     Semicolon,
 

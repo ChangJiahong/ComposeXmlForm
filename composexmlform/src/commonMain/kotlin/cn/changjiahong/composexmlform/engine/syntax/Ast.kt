@@ -48,9 +48,26 @@ internal sealed interface Expr {
 
     /** `{ stmt; stmt }`。作为表达式时求值为最后一个语句的表达式值。 */
     data class Block(val statements: List<Stmt>, override val span: Span) : Expr
+
+    /**
+     * `await f(x)`。操作数**必须是函数调用**（F-4）。
+     *
+     * 做成表达式而不是语句（PLAN I-9 的偏差），是因为 `val r = await f(x)` 是唯一自然的写法 ——
+     * 语句节点装不进 `VarDecl.init`。它仍然只能出现在**语句位置或赋值右侧**：
+     * 解引号 `await f(x) + 1` 在解析期就被拒（求值器没有挂起版本的算术）。
+     */
+    data class Await(val call: Call, override val span: Span) : Expr
+
+    /**
+     * `@{x -> …}` 作为**表达式**（F-5）：可以赋给 `data` 的成员、当作实参、放进字面量。
+     *
+     * 与属性里的 `@{}` 走同一套 [LambdaExpr]，区别只在谁把它包成值：
+     * 属性由渲染层包（因为要按槽位类型定兜底），这里由求值器包。
+     */
+    data class Lambda(val lambda: LambdaExpr, override val span: Span) : Expr
 }
 
-/** 语句。表达式全集 + 赋值、声明、返回、`await`。 */
+/** 语句。表达式全集 + 赋值、声明、返回。 */
 internal sealed interface Stmt {
 
     val span: Span
@@ -65,9 +82,6 @@ internal sealed interface Stmt {
 
     /** `target = value`。target 只能是 [Expr.Name] 或 [Expr.Get] / [Expr.Index]。 */
     data class Assign(val target: Expr, val value: Expr, override val span: Span) : Stmt
-
-    /** `await call(...)`。操作数**必须是函数调用**（F-4）。 */
-    data class Await(val call: Expr.Call, override val span: Span) : Stmt
 
     data class Return(val value: Expr?, override val span: Span) : Stmt
 

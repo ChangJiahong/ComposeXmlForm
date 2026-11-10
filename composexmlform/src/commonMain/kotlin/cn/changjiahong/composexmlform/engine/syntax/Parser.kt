@@ -54,7 +54,11 @@ internal class Parser(private val tokens: List<Token>) {
         return when (token.kind) {
             TokenKind.Val, TokenKind.Var -> varDecl()
             TokenKind.Return -> returnStmt()
-            TokenKind.Await -> awaitStmt()
+            TokenKind.Await -> {
+                val expr = awaitOrExpression()
+                Stmt.ExprStmt(expr, expr.span)
+            }
+
             TokenKind.LBrace -> {
                 val block = block()
                 Stmt.ExprStmt(block, block.span)
@@ -66,7 +70,7 @@ internal class Parser(private val tokens: List<Token>) {
                 if (check(TokenKind.Eq)) {
                     advance()
                     skipSeparators()
-                    val value = expression()
+                    val value = awaitOrExpression()
                     if (!expr.isAssignable()) {
                         throw SyntaxError("赋值左侧只能是变量或成员访问", expr.span)
                     }
@@ -84,7 +88,7 @@ internal class Parser(private val tokens: List<Token>) {
         val name = expect(TokenKind.Identifier, "变量名")
         expect(TokenKind.Eq, "=")
         skipSeparators()
-        val init = expression()
+        val init = awaitOrExpression()
         return Stmt.VarDecl(name.text, mutable, init, spanOf(keyword.span, init.span))
     }
 
@@ -94,21 +98,24 @@ internal class Parser(private val tokens: List<Token>) {
         val value = if (next.kind.isSeparator() || next.kind == TokenKind.RBrace || next.kind == TokenKind.Eof) {
             null
         } else {
-            expression()
+            awaitOrExpression()
         }
         return Stmt.Return(value, spanOf(keyword.span, (value?.span ?: keyword.span)))
     }
 
     /**
-     * `await` 的操作数**必须是一个函数调用**（F-4）。
+     * `await` 只能出现在**语句位置或赋值右侧**（F-4 / P-5）。
      *
-     * 允许 `await 1 + 2` 会逼求值器在挂起上下文里做算术 —— 那就得写第二套 suspend 求值器，
-     * 而「只有一份求值器」是这套设计的地基。
+     * 允许它出现在任意表达式位置会逼求值器在挂起上下文里做算术 —— 那就得写第二套 suspend 求值器，
+     * 而「只有一份求值器」是这套设计的地基。这里的收口方式：解析 `await call(…)` 之后，
+     * 紧跟的 token 必须是分隔符 / 收尾括号，否则当场报错。
      */
-    private fun awaitStmt(): Stmt {
+    private fun awaitOrExpression(): Expr {
+        if (!check(TokenKind.Await)) return expression()
+
         val keyword = advance()
         skipSeparators()
-        val operand = unary()
+        val operand = postfix()
         if (operand !is Expr.Call) {
             throw SyntaxError(
                 "await 的操作数必须是函数调用，例如 await http.get(url)",
@@ -116,13 +123,16 @@ internal class Parser(private val tokens: List<Token>) {
             )
         }
         val following = peek()
-        if (precedence(following.kind) != 0) {
+        if (!following.kind.isSeparator() && following.kind != TokenKind.Eof &&
+            following.kind != TokenKind.RBrace && following.kind != TokenKind.RParen &&
+            following.kind != TokenKind.Comma
+        ) {
             throw SyntaxError(
                 "await 的结果不能直接参与运算，请先赋给变量：val r = await f(x)",
                 following.span,
             )
         }
-        return Stmt.Await(operand, spanOf(keyword.span, operand.span))
+        return Expr.Await(operand, spanOf(keyword.span, operand.span))
     }
 
     private fun block(): Expr.Block {
@@ -246,8 +256,30 @@ internal class Parser(private val tokens: List<Token>) {
             TokenKind.LBracket -> arrayLiteral()
             TokenKind.LBrace -> objectLiteral()
             TokenKind.If -> ifExpression()
+            TokenKind.At -> lambdaLiteral()
             else -> throw SyntaxError("期望表达式，遇到『${token}』", token.span)
         }
+    }
+
+    /**
+     * `@{x -> …}` 作为表达式（F-5）。
+     *
+     * 属性里的 `@{}` 由 `AttrScanner` 整段切出来再调 [parseLambda]，所以这条路径只在
+     * **脚本里**（`data.user.print = @{ … }`、`f(@{ … })`）用到。
+     */
+    private fun lambdaLiteral(): Expr {
+        val at = advance()
+        expect(TokenKind.LBrace, "{")
+        val params = takeParams()
+        val body = ArrayList<Stmt>()
+        while (true) {
+            skipSeparators()
+            if (check(TokenKind.RBrace)) break
+            if (check(TokenKind.Eof)) throw SyntaxError("@{ … } 没有闭合", at.span)
+            body += statement()
+        }
+        val close = expect(TokenKind.RBrace, "}")
+        return Expr.Lambda(LambdaExpr(params, body, spanOf(at.span, close.span)), spanOf(at.span, close.span))
     }
 
     private fun arrayLiteral(): Expr {
@@ -326,23 +358,59 @@ internal class Parser(private val tokens: List<Token>) {
         return Expr.If(cond, thenExpr, elseExpr, spanOf(keyword.span, (elseExpr ?: thenExpr).span))
     }
 
-    private fun branch(): Expr = if (check(TokenKind.LBrace)) block() else expression()
+    /**
+     * `if` 的分支。`{ … }` 是块，其余是表达式。
+     *
+     * `return` / `await` 开头时包成单语句块：Kotlin 里它们本身就是表达式（`Nothing` 与挂起），
+     * 我们不为它引入 AST 节点 —— 包成块之后求值路径与手写 `{ return 1 }` 完全一致。
+     */
+    private fun branch(): Expr = when {
+        check(TokenKind.LBrace) -> block()
+        check(TokenKind.Return) || check(TokenKind.Await) -> {
+            val stmt = statement()
+            Expr.Block(listOf(stmt), stmt.span)
+        }
+
+        else -> expression()
+    }
 
     // ── 工具 ──────────────────────────────────────────────────
 
+    /**
+     * `x, y -> …` 的参数表。没有 `->` 就是无参（`@{click()}`）。
+     *
+     * 逐 token 看而不是 `indexOfFirst { Arrow }`：后者在嵌套 lambda（`@{x -> f(@{y -> y})}`）
+     * 里会找到外层箭头，把游标推错位置。
+     */
     private fun takeParams(): List<String> {
-        // 形如 `x, y -> …`；没有 `->` 就是无参（`@{click()}`）
-        val arrow = tokens.indexOfFirst { it.kind == TokenKind.Arrow }
-        if (arrow <= 0) return emptyList()
-        for (i in 0 until arrow) {
-            val kind = tokens[i].kind
-            val ok = if (i % 2 == 0) kind == TokenKind.Identifier else kind == TokenKind.Comma
-            if (!ok) return emptyList()
+        val names = ArrayList<String>(2)
+        var index = pos
+        var expectName = true
+        while (index < tokens.size) {
+            when (tokens[index].kind) {
+                TokenKind.Arrow -> {
+                    if (expectName && names.isNotEmpty()) return emptyList() // 逗号结尾，非法
+                    pos = index + 1
+                    return names
+                }
+
+                TokenKind.Identifier -> {
+                    if (!expectName) return emptyList() // 形如 `x y`，非法
+                    names += tokens[index].text
+                    expectName = false
+                    index++
+                }
+
+                TokenKind.Comma -> {
+                    if (expectName) return emptyList() // 连续逗号或以逗号开头
+                    expectName = true
+                    index++
+                }
+
+                else -> return emptyList() // 第一条语句不是参数表
+            }
         }
-        if (arrow % 2 == 0) return emptyList() // 逗号结尾
-        val params = (0 until arrow step 2).map { tokens[it].text }
-        pos = arrow + 1
-        return params
+        return emptyList()
     }
 
     private fun literalValue(token: Token): Any? = when (token.kind) {
@@ -368,6 +436,8 @@ internal class Parser(private val tokens: List<Token>) {
         is Expr.Arr -> expr.copy(span = span)
         is Expr.If -> expr.copy(span = span)
         is Expr.Block -> expr.copy(span = span)
+        is Expr.Await -> expr.copy(span = span)
+        is Expr.Lambda -> expr.copy(span = span)
     }
 
     private fun precedence(kind: TokenKind): Int = when (kind) {

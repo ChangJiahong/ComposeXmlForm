@@ -61,6 +61,8 @@ kotlin {
             implementation(libs.kotlin.test)
             // runComposeUiTest：渲染层测试（重组计数、缺失渲染器降级）
             implementation(libs.compose.uiTest)
+            // runTest：脚本执行外壳（await）的测试
+            implementation(libs.kotlinx.coroutinesTest)
         }
         getByName("jvmTest").dependencies {
             // 桌面端 UI 测试需要一个具体的 skiko 运行时（headless 也能跑）
