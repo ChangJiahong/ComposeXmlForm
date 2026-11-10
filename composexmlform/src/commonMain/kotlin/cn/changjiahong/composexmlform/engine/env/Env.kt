@@ -143,7 +143,7 @@ class Env internal constructor(
     }
 
     /** 按名字取全局对象（`data` / `config` / `action` / 宿主注册的）。 */
-    fun global(name: String): Value? = globals[name]
+    fun global(name: String): Value = globals[name]
 
     // ── 读 ────────────────────────────────────────────────────
 

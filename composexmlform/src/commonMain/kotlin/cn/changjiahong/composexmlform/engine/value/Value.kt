@@ -44,7 +44,7 @@ class HostObject(val raw: Any) {
  * 参数不携带签名（X-2），个数与含义由槽位语义决定。
  */
 fun interface Function {
-    fun invoke(target: Value?, args: List<Value>): Value
+    fun invoke(target: Value, args: List<Value>): Value
 }
 
 /**
@@ -54,9 +54,9 @@ fun interface Function {
  * 这里只负责把误用变成明确错误而不是死锁。
  */
 interface SuspendFunction : Function {
-    suspend fun invokeSuspend(target: Value?, args: List<Value>): Value
+    suspend fun invokeSuspend(target: Value, args: List<Value>): Value
 
-    override fun invoke(target: Value?, args: List<Value>): Value =
+    override fun invoke(target: Value, args: List<Value>): Value =
         throw IllegalStateException("该函数需要挂起上下文，不能出现在属性表达式中")
 }
 

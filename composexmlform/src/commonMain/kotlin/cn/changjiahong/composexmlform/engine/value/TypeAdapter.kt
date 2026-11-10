@@ -232,5 +232,5 @@ object AnyAdapter : TypeAdapter<Value> {
 
     override fun coerce(value: Value, site: AttrSite): Value = value
 
-    override fun default(): Value? = null
+    override fun default(): Value = null
 }

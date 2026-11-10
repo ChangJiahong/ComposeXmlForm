@@ -14,7 +14,7 @@ import cn.changjiahong.composexmlform.engine.diag.EvalError
 object Fn {
 
     /** 最原始的形式：拿得到 `target` 与完整参数表。 */
-    fun of(block: (target: Value?, args: List<Value>) -> Value): Function =
+    fun of(block: (target: Value, args: List<Value>) -> Value): Function =
         Function { target, args -> block(target, args) }
 
     fun noArg(block: () -> Value): Function = Function { _, args ->
@@ -38,14 +38,14 @@ object Fn {
     }
 
     /** 挂起函数：只能出现在 `await f(x)` 里，或由宿主的协程上下文直接调用。 */
-    fun suspendOf(block: suspend (target: Value?, args: List<Value>) -> Value): SuspendFunction =
+    fun suspendOf(block: suspend (target: Value, args: List<Value>) -> Value): SuspendFunction =
         object : SuspendFunction {
-            override suspend fun invokeSuspend(target: Value?, args: List<Value>): Value =
+            override suspend fun invokeSuspend(target: Value, args: List<Value>): Value =
                 block(target, args)
         }
 
     fun suspendOf1(block: suspend (Value) -> Value): SuspendFunction = object : SuspendFunction {
-        override suspend fun invokeSuspend(target: Value?, args: List<Value>): Value {
+        override suspend fun invokeSuspend(target: Value, args: List<Value>): Value {
             args.requireArity(1)
             return block(args[0])
         }
@@ -53,7 +53,7 @@ object Fn {
 
     fun suspendOf2(block: suspend (Value, Value) -> Value): SuspendFunction =
         object : SuspendFunction {
-            override suspend fun invokeSuspend(target: Value?, args: List<Value>): Value {
+            override suspend fun invokeSuspend(target: Value, args: List<Value>): Value {
                 args.requireArity(2)
                 return block(args[0], args[1])
             }
