@@ -6,6 +6,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.tooling.preview.Preview
 import cn.changjiahong.composexmlform.api.DynamicLayout
 import cn.changjiahong.composexmlform.api.actions
+import cn.changjiahong.composexmlform.api.list
 import cn.changjiahong.composexmlform.api.rememberData
 
 /**
@@ -34,9 +35,13 @@ private const val FORM_XML = """
     </If>
 
     <Text value="联系人" fontSize="16" fontWeight="bold" />
-    <Foreach source="{{data.contacts}}" item="item" key="id">
+    <Foreach source="{{data.contacts}}" item="item" index="i" key="id">
         <Column spacing="8" padding="12" backgroundColor="#F3F4F6">
-            <Text value="{{item.name}}" fontWeight="bold" />
+            <Row spacing="8" verticalAlignment="center">
+                <Text value="{{item.name}}" fontWeight="bold" />
+                <!-- 行上下文里的 i 作为实参传给动作：动作拿到的是这一行的下标 -->
+                <Button text="删除" onClick="@{ action.removeAt(i) }" />
+            </Row>
             <TextField label="电话" value="{{item.phone}}" />
         </Column>
     </Foreach>
@@ -72,6 +77,10 @@ fun App() {
             on("submit") { println("[ComposeXmlUI] submit") }
             on("login") { println("[ComposeXmlUI] login") }
             on("logout") { println("[ComposeXmlUI] logout") }
+            on("removeAt") {
+                println("[ComposeXmlUI] removeAt(${intArg(0)})")
+                data.list("contacts").removeAt(intArg(0))
+            }
         }
     }
     MaterialTheme {
