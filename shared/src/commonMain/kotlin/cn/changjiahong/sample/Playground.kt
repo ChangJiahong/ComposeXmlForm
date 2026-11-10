@@ -77,7 +77,6 @@ import cn.changjiahong.composexmlform.engine.render.orElse
 import cn.changjiahong.composexmlform.engine.render.value
 import cn.changjiahong.composexmlform.engine.value.DataObject
 import kotlinx.coroutines.launch
-import kotlin.random.Random
 
 /**
  * 三端统一的测试台。
@@ -118,9 +117,17 @@ private val PLAYGROUND_XML = """
     </If>
 
     <Text value="联系人" fontSize="16" fontWeight="bold" />
-    <Foreach source="{{data.contacts}}" item="item" key="id">
+    <Row spacing="8">
+        <Button text="添加联系人" onClick="@{ action.addContact() }" />
+        <Button text="删除末尾" onClick="@{ action.removeLast() }" />
+    </Row>
+    <Foreach source="{{data.contacts}}" item="item" index="i" key="id">
         <Column spacing="8" padding="12" backgroundColor="#F3F4F6">
-            <Text value="{{item.name}}" fontWeight="bold" />
+            <Row spacing="8" verticalAlignment="center">
+                <Text value="{{item.name}}" fontWeight="bold" />
+                <!-- i 是这一行的下标，作为实参传给动作 -->
+                <Button text="删除" onClick="@{ action.removeAt(i) }" />
+            </Row>
             <TextField label="电话" value="{{item.phone}}" />
         </Column>
     </Foreach>
@@ -151,6 +158,28 @@ private fun playgroundInitialData(): Map<String, Any?> = mapOf(
         mapOf("id" to 2, "name" to "韩梅梅", "phone" to "13800000002"),
     ),
 )
+
+/**
+ * 追加一条联系人。XML 按钮（`action.addContact()`）与数据页按钮共用同一个实现。
+ *
+ * id 取「现有最大 id + 1」而不是 `size` 或随机数：`Foreach key="id"` 用 id 做行 key，
+ * 一旦撞 id，两行会共用同一份 composition 状态 —— 表现是「删掉第 0 行，第 1 行的输入框
+ * 内容跳到了第 0 行」。删过中间几条之后 `size` 必然撞上已有 id，所以只能看最大值。
+ */
+private fun DataObject.addContact() {
+    val contacts = list("contacts")
+    val maxId = (0 until contacts.size)
+        .mapNotNull { (contacts[it] as? DataObject)?.member("id") as? Long }
+        .maxOrNull() ?: 0L
+    val next = maxId + 1
+    contacts.add(
+        mapOf(
+            "id" to next,
+            "name" to "联系人 $next",
+            "phone" to "139" + next.toString().padStart(8, '0'),
+        ),
+    )
+}
 
 // ---------------- 演示组件：RatingBar ----------------
 
@@ -294,6 +323,13 @@ private fun WidePlayground(
             on("login") { data.set("isLogin", true) }
             on("logout") { data.set("isLogin", false) }
             on("submit") { data.set("submitCount", data.getInt("submitCount") + 1) }
+            on("addContact") { data.addContact() }
+            // 实参来自 `<Foreach index="i">`：点是哪一行，拿到的就是哪一行的下标
+            on("removeAt") { data.list("contacts").removeAt(intArg(0)) }
+            on("removeLast") {
+                val contacts = data.list("contacts")
+                if (contacts.size > 0) contacts.removeAt(contacts.size - 1)
+            }
         }
     }
 
@@ -353,6 +389,12 @@ private fun CompactPlayground(
             on("submit") {
                 data.set("submitCount", data.getInt("submitCount") + 1)
                 scope.launch { pager.animateScrollToPage(PAGE_DATA) }
+            }
+            on("addContact") { data.addContact() }
+            on("removeAt") { data.list("contacts").removeAt(intArg(0)) }
+            on("removeLast") {
+                val contacts = data.list("contacts")
+                if (contacts.size > 0) contacts.removeAt(contacts.size - 1)
             }
         }
     }
@@ -566,15 +608,7 @@ private fun DataPanel(
         Spacer(Modifier.height(10.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PillButton(text = "加联系人", onClick = {
-                data.list("contacts").add(
-                    mapOf(
-                        "id" to Random.nextInt(1000, 9999),
-                        "name" to "新联系人",
-                        "phone" to "13800000000",
-                    ),
-                )
-            })
+            PillButton(text = "加联系人", onClick = { data.addContact() })
             PillButton(text = "删末尾", onClick = {
                 val contacts = data.list("contacts")
                 if (contacts.size > 0) contacts.removeAt(contacts.size - 1)

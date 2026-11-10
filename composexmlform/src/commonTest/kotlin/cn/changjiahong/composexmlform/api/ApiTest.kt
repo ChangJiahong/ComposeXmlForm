@@ -5,6 +5,7 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -256,6 +257,65 @@ class DynamicLayoutTest {
         }
         onNodeWithText("第一").assertExists()
         onNodeWithText("第二").assertExists()
+    }
+
+    /**
+     * 动作增删列表 → `Foreach` 行数跟着变。
+     *
+     * 覆盖的是「XML 里的按钮改数据」这条最常用路径：`data.list(...)` 发 `DataChange`
+     * 并且结构版本是快照状态，所以增删之后行会重建。`removeAt(i)` 的实参来自
+     * `<Foreach index="i">`，点第几行就删第几行。
+     */
+    @Test
+    fun actionAddsAndRemovesRows() = runComposeUiTest {
+        val data = dataOf(
+            mapOf(
+                "list" to listOf(
+                    mapOf("id" to 1L, "name" to "第一"),
+                    mapOf("id" to 2L, "name" to "第二"),
+                ),
+            ),
+        )
+        val actionSet = actions {
+            on("add") {
+                val rows = data.list("list")
+                val next = rows.size + 1
+                rows.add(mapOf("id" to next.toLong(), "name" to "新增$next"))
+            }
+            on("removeAt") { data.list("list").removeAt(intArg(0)) }
+        }
+
+        setContent {
+            DynamicLayout(
+                xml = """
+                    <Column>
+                        <Button text="添加" onClick="@{ action.add() }"/>
+                        <Foreach source="{{data.list}}" item="row" index="i" key="id">
+                            <Column>
+                                <Text value="{{row.name}}"/>
+                                <Button text="删除" onClick="@{ action.removeAt(i) }"/>
+                            </Column>
+                        </Foreach>
+                    </Column>
+                """.trimIndent(),
+                data = data,
+                actions = actionSet,
+            )
+        }
+
+        assertEquals(2, data.list("list").size)
+
+        onNodeWithText("添加").performClick()
+        waitForIdle()
+        assertEquals(3, data.list("list").size)
+        onNodeWithText("新增3").assertExists()
+
+        // 第一行的「删除」：删完「第一」应当消失，后加的那条还在
+        onAllNodesWithText("删除")[0].performClick()
+        waitForIdle()
+        assertEquals(2, data.list("list").size)
+        onNodeWithText("第一").assertDoesNotExist()
+        onNodeWithText("新增3").assertExists()
     }
 
     @Test
