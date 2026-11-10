@@ -96,6 +96,9 @@ fun DataObject.getLong(path: String, default: Long = 0L): Long = when (val value
     else -> default
 }
 
+fun DataObject.getInt(path: String, default: Int = 0): Int =
+    getLong(path, default.toLong()).toInt()
+
 fun DataObject.getDouble(path: String, default: Double = 0.0): Double = when (val value = get(path)) {
     is Double -> value
     is Long -> value.toDouble()

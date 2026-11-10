@@ -49,27 +49,33 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.changjiahong.composexmlform.ComposeXmlForm
 import cn.changjiahong.composexmlform.api.Actions
-import cn.changjiahong.composexmlform.api.BindableData
 import cn.changjiahong.composexmlform.api.ComponentModule
 import cn.changjiahong.composexmlform.api.DynamicLayout
+import cn.changjiahong.composexmlform.api.EngineRegistry
 import cn.changjiahong.composexmlform.api.actions
-import cn.changjiahong.composexmlform.api.install
-import cn.changjiahong.composexmlform.api.rememberBindableData
-import cn.changjiahong.composexmlform.core.Diagnostic
-import cn.changjiahong.composexmlform.core.JsonCodec
-import cn.changjiahong.composexmlform.node.Attrs
-import cn.changjiahong.composexmlform.node.StyledNode
-import cn.changjiahong.composexmlform.node.ValAttr
-import cn.changjiahong.composexmlform.node.VarAttr
-import cn.changjiahong.composexmlform.parser.EngineRegistry
-import cn.changjiahong.composexmlform.renderer.LocalRenderDiagnostics
-import cn.changjiahong.composexmlform.renderer.NodeRenderer
-import cn.changjiahong.composexmlform.renderer.containerModifier
-import cn.changjiahong.composexmlform.renderer.current
-import cn.changjiahong.composexmlform.renderer.get
-import cn.changjiahong.composexmlform.renderer.provideDelegate
-import cn.changjiahong.composexmlform.renderer.toColor
-import cn.changjiahong.composexmlform.runtime.DynamicLayoutRuntime
+import cn.changjiahong.composexmlform.api.getInt
+import cn.changjiahong.composexmlform.api.list
+import cn.changjiahong.composexmlform.api.patchJson
+import cn.changjiahong.composexmlform.api.rememberData
+import cn.changjiahong.composexmlform.api.rememberField
+import cn.changjiahong.composexmlform.api.reset
+import cn.changjiahong.composexmlform.api.set
+import cn.changjiahong.composexmlform.api.toJson
+import cn.changjiahong.composexmlform.components.BoxStyle
+import cn.changjiahong.composexmlform.components.StyleAttrs
+import cn.changjiahong.composexmlform.components.modifier
+import cn.changjiahong.composexmlform.components.styleOf
+import cn.changjiahong.composexmlform.components.toColor
+import cn.changjiahong.composexmlform.engine.diag.Diagnostic
+import cn.changjiahong.composexmlform.engine.node.Attr
+import cn.changjiahong.composexmlform.engine.node.AttrDef
+import cn.changjiahong.composexmlform.engine.node.AttrSlot
+import cn.changjiahong.composexmlform.engine.node.Node
+import cn.changjiahong.composexmlform.engine.render.DiagnosticSink
+import cn.changjiahong.composexmlform.engine.render.NodeRenderer
+import cn.changjiahong.composexmlform.engine.render.orElse
+import cn.changjiahong.composexmlform.engine.render.value
+import cn.changjiahong.composexmlform.engine.value.DataObject
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
@@ -103,16 +109,16 @@ private val PLAYGROUND_XML = """
     <If test="{{isLogin}}">
         <Then>
             <Text value="状态：已登录" color="#1B7F3B" />
-            <Button text="退出登录" action="logout()" width="fill" />
+            <Button text="退出登录" onClick="@{ action.logout() }" width="fill" />
         </Then>
         <Else>
             <Text value="状态：未登录" color="#C0392B" />
-            <Button text="登录" action="login()" width="fill" />
+            <Button text="登录" onClick="@{ action.login() }" width="fill" />
         </Else>
     </If>
 
     <Text value="联系人" fontSize="16" fontWeight="bold" />
-    <Foreach items="{{contacts}}" item="item" key="id">
+    <Foreach source="{{data.contacts}}" item="item" key="id">
         <Column spacing="8" padding="12" backgroundColor="#F3F4F6">
             <Text value="{{item.name}}" fontWeight="bold" />
             <TextField label="电话" value="{{item.phone}}" />
@@ -121,7 +127,7 @@ private val PLAYGROUND_XML = """
 
     <RatingBar label="评分（自定义组件）" value="{{rating}}" max="5" />
 
-    <Button text="提交并查看数据" action="submit()" width="fill" />
+    <Button text="提交并查看数据" onClick="@{ action.submit() }" width="fill" />
 </Column>
 """.trimIndent()
 
@@ -151,15 +157,26 @@ private fun playgroundInitialData(): Map<String, Any?> = mapOf(
 /**
  * 自定义组件示例：新增组件不需要改动引擎核心。
  *
- * 属性声明在类体里（读过的才算「支持」），需要尺寸 / padding 就继承 [StyledNode]。
+ * 三件事：声明属性（`AttrSlot`）、声明节点、注册「标签 + 构造器 + 渲染器」。
+ * 尺寸 / padding 这类样式属性的声明在 `StyleAttrs` 里，`styleOf(attrs)` 一次取全。
  */
-class RatingBarNode(attrs: Attrs = Attrs.Empty) : StyledNode(attrs) {
+class RatingBarNode(
+    id: String,
+    val value: AttrSlot<Long>,
+    val max: AttrSlot<Long>,
+    val label: AttrSlot<String>,
+    val color: AttrSlot<String>,
+    val style: BoxStyle,
+) : Node(id)
 
-    /** 评分要写回数据，所以是 [VarAttr]：字面量在解析期就被拒；不写则退化为局部 state。 */
-    val value: VarAttr<Int>? = attrs.varOf("value")
-    val max: ValAttr<Int>? = attrs.valOf("max")
-    val label: ValAttr<String>? = attrs.valOf("label")
-    val color: ValAttr<String>? = attrs.valOf("color")
+private object RatingBarAttrs {
+    /** 评分要写回数据，所以是**可写槽位**：只接受 `{{path}}`，不写则退化为局部 state。 */
+    val value: AttrDef<Long> = Attr.varInt("value", default = 0L)
+    val max: AttrDef<Long> = Attr.int("max", default = 5L)
+    val label: AttrDef<String> = Attr.string("label")
+    val color: AttrDef<String> = Attr.string("color")
+
+    val All: List<AttrDef<*>> = listOf(value, max, label, color) + StyleAttrs.All
 }
 
 // NodeRenderer 是 fun interface：直接用 object 实现，不需要（也不能）带构造括号。
@@ -167,14 +184,14 @@ object RatingBarRenderer : NodeRenderer<RatingBarNode> {
 
     @Composable
     override fun Render(node: RatingBarNode) {
-        var value by node.value
-        val max = node.max.get(5)
-        val current = value ?: 0
-        val activeColor = node.color?.current().toColor()
+        val (bound, onChange) = node.value.rememberField<Long>()
+        val max = node.max.orElse(5L).toInt()
+        val current = (bound ?: 0L).toInt()
+        val activeColor = node.color.value().toColor()
             .takeIf { it != Color.Unspecified } ?: Color(0xFFF5A623)
-        val label = node.label?.current()
+        val label = node.label.value()
 
-        Column(modifier = node.style.containerModifier()) {
+        Column(modifier = node.style.modifier()) {
             if (label != null) {
                 Text(
                     text = label,
@@ -189,7 +206,7 @@ object RatingBarRenderer : NodeRenderer<RatingBarNode> {
                         fontSize = 26.sp,
                         color = if (index < current) activeColor else Color(0xFFD8D8D8),
                         modifier = Modifier
-                            .clickable { value = index + 1 }
+                            .clickable { onChange((index + 1).toLong()) }
                             .padding(1.dp),
                     )
                 }
@@ -199,7 +216,22 @@ object RatingBarRenderer : NodeRenderer<RatingBarNode> {
 }
 
 val DemoComponents: ComponentModule = ComponentModule { registry ->
-    registry.leaf("RatingBar", ::RatingBarNode, RatingBarRenderer)
+    registry.register(
+        nodeClass = RatingBarNode::class,
+        tag = "RatingBar",
+        attributes = RatingBarAttrs.All,
+        create = { id, attrs, _ ->
+            RatingBarNode(
+                id = id,
+                value = attrs.attr(RatingBarAttrs.value),
+                max = attrs.attr(RatingBarAttrs.max),
+                label = attrs.attr(RatingBarAttrs.label),
+                color = attrs.attr(RatingBarAttrs.color),
+                style = styleOf(attrs),
+            )
+        },
+        renderer = RatingBarRenderer,
+    )
 }
 
 // ---------------- 入口 ----------------
@@ -214,7 +246,7 @@ private val PAGE_TITLES = listOf("XML 源码", "实时预览", "数据快照")
 
 @Composable
 fun Playground() {
-    val data = rememberBindableData(playgroundInitialData())
+    val data = rememberData(playgroundInitialData())
     val registry = remember { ComposeXmlForm.createRegistry { install(DemoComponents) } }
 
     var xmlText by remember { mutableStateOf(PLAYGROUND_XML) }
@@ -230,17 +262,15 @@ fun Playground() {
     }
 
     MaterialTheme {
-        CompositionLocalProvider(LocalRenderDiagnostics provides reporter) {
-            BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background),
-            ) {
-                if (maxWidth >= WIDE_BREAKPOINT) {
-                    WidePlayground(data, registry, xmlText, { xmlText = it }, logs)
-                } else {
-                    CompactPlayground(data, registry, xmlText, { xmlText = it }, logs)
-                }
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        ) {
+            if (maxWidth >= WIDE_BREAKPOINT) {
+                WidePlayground(data, registry, xmlText, { xmlText = it }, logs, reporter)
+            } else {
+                CompactPlayground(data, registry, xmlText, { xmlText = it }, logs, reporter)
             }
         }
     }
@@ -250,11 +280,12 @@ fun Playground() {
 
 @Composable
 private fun WidePlayground(
-    data: BindableData,
+    data: DataObject,
     registry: EngineRegistry,
     xmlText: String,
     onXmlChange: (String) -> Unit,
     logs: List<String>,
+    sink: DiagnosticSink,
 ) {
     var showCode by remember { mutableStateOf(true) }
 
@@ -284,6 +315,7 @@ private fun WidePlayground(
                 actionSet = actionSet,
                 xmlText = xmlText,
                 modifier = Modifier.fillMaxSize(),
+                sink = sink,
             )
             if (!showCode) {
                 PillButton(
@@ -303,24 +335,24 @@ private fun WidePlayground(
 
 @Composable
 private fun CompactPlayground(
-    data: BindableData,
+    data: DataObject,
     registry: EngineRegistry,
     xmlText: String,
     onXmlChange: (String) -> Unit,
     logs: List<String>,
+    sink: DiagnosticSink,
 ) {
     val pager = rememberPagerState(initialPage = PAGE_PREVIEW, pageCount = { PAGE_TITLES.size })
     val scope = rememberCoroutineScope()
 
-    // 提交动作直接在 handler 里挂起跳到数据页：handler 本身就是 suspend 的，
-    // 不需要额外 launch 一层。
+    // 动作是**同步**的（只负责改数据）；跳页这种挂起操作要自己 launch。
     val actionSet = remember(data, pager) {
         actions {
             on("login") { data.set("isLogin", true) }
             on("logout") { data.set("isLogin", false) }
             on("submit") {
                 data.set("submitCount", data.getInt("submitCount") + 1)
-                pager.animateScrollToPage(PAGE_DATA)
+                scope.launch { pager.animateScrollToPage(PAGE_DATA) }
             }
         }
     }
@@ -347,6 +379,7 @@ private fun CompactPlayground(
                     actionSet = actionSet,
                     xmlText = xmlText,
                     modifier = Modifier.fillMaxSize(),
+                    sink = sink,
                 )
 
                 else -> DataPanel(data, logs, Modifier.fillMaxSize())
@@ -454,22 +487,23 @@ private fun CodePanel(
 
 @Composable
 private fun PreviewPanel(
-    data: BindableData,
+    data: DataObject,
     registry: EngineRegistry,
     actionSet: Actions,
     xmlText: String,
     modifier: Modifier = Modifier,
+    sink: DiagnosticSink,
 ) {
-    // 渲染前先校验：解析 / 属性 / 结构 / 动作注册，任何错误都以面板形式展示，不炸 composition。
-    val error = remember(xmlText, registry, actionSet) {
-        runCatching { DynamicLayoutRuntime(xmlText, data, PLAYGROUND_CONFIG, actionSet, registry) }
-            .onSuccess { it.dispose() }
-            .exceptionOrNull()
+    // 渲染前先解析：标签 / 属性 / 语法 / 全局对象名的问题都在这一步暴露。
+    // 有错误就只画诊断面板 —— 残缺的树渲染出来只会掩盖真正的原因。
+    val diagnostics = remember(xmlText, registry) {
+        ComposeXmlForm.parse(xmlText, data, PLAYGROUND_CONFIG, registry = registry).diagnostics
     }
+    val hasError = diagnostics.any { it.isError }
 
     Box(modifier.padding(16.dp)) {
-        if (error != null) {
-            ErrorPanel(error, Modifier.fillMaxSize())
+        if (hasError) {
+            ErrorPanel(diagnostics, Modifier.fillMaxSize())
         } else {
             DynamicLayout(
                 xml = xmlText,
@@ -478,6 +512,7 @@ private fun PreviewPanel(
                 actions = actionSet,
                 modifier = Modifier.fillMaxSize(),
                 registry = registry,
+                diagnosticSink = sink,
             )
         }
     }
@@ -485,13 +520,13 @@ private fun PreviewPanel(
 
 @Composable
 private fun DataPanel(
-    data: BindableData,
+    data: DataObject,
     logs: List<String>,
     modifier: Modifier = Modifier,
 ) {
-    // 整表快照：预览里任何一次输入写回都会让它变，数据页因此永远和界面同源。
-    val snapshot by data.asState()
-    val json = remember(snapshot) { JsonCodec.encode(snapshot) }
+    // 整表快照：`toJson()` 会读全部成员，于是订阅全部成员 —— 预览里任何一次输入写回
+    // 都会让它重算，数据页因此永远和界面同源。
+    val json = data.toJson()
 
     var editing by remember { mutableStateOf(false) }
     var draft by remember { mutableStateOf("") }
@@ -505,7 +540,7 @@ private fun DataPanel(
         editing = true
     }
     val commitEdit: () -> Unit = {
-        runCatching { data.applyJson(draft) }
+        runCatching { data.patchJson(draft) }
             .onSuccess {
                 editing = false
                 editError = null
@@ -711,18 +746,18 @@ private fun HorizontalRule() {
 }
 
 @Composable
-private fun ErrorPanel(error: Throwable, modifier: Modifier = Modifier) {
+private fun ErrorPanel(diagnostics: List<Diagnostic>, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .background(MaterialTheme.colorScheme.errorContainer)
             .padding(16.dp)
             .verticalScroll(rememberScrollState()),
     ) {
-        Text("XML / 运行时错误", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text("XML / 解析错误", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
         SelectionContainer {
             Text(
-                text = error.message ?: error.toString(),
+                text = diagnostics.joinToString("\n") { "${it.severity} ${it.code}：${it.message}" },
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
