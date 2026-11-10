@@ -33,6 +33,10 @@ class EvalContext(
 
     fun withFrame(frame: CallFrame?): EvalContext = EvalContext(env, frame, args, hint, methods)
 
+    /** 换兜底提示：读属性时由 `AttrDef.slotKind` 决定（V-13）。 */
+    internal fun withHint(slotKind: SlotKind): EvalContext =
+        if (slotKind == hint) this else EvalContext(env, frame, args, slotKind, methods)
+
     /** 构造脚本函数体的现场：换 frame 与 args，继承 env / hint / methods（S-1：不捕获局部）。 */
     internal fun forCall(frame: CallFrame, args: List<Value>): EvalContext =
         EvalContext(env, frame, args, hint, methods)
