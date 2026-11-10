@@ -3,24 +3,73 @@ package cn.changjiahong.composexmlform.api
 import cn.changjiahong.composexmlform.engine.diag.FrozenWriteException
 import cn.changjiahong.composexmlform.engine.env.Env
 import cn.changjiahong.composexmlform.engine.value.Absent
+import cn.changjiahong.composexmlform.engine.value.AttrSite
+import cn.changjiahong.composexmlform.engine.value.BooleanAdapter
+import cn.changjiahong.composexmlform.engine.value.CoerceException
 import cn.changjiahong.composexmlform.engine.value.DataObject
+import cn.changjiahong.composexmlform.engine.value.DoubleAdapter
 import cn.changjiahong.composexmlform.engine.value.Function
+import cn.changjiahong.composexmlform.engine.value.IntAdapter
+import cn.changjiahong.composexmlform.engine.value.LongAdapter
+import cn.changjiahong.composexmlform.engine.value.StringAdapter
+import cn.changjiahong.composexmlform.engine.value.TypeAdapter
 import cn.changjiahong.composexmlform.engine.value.Value
 
 /**
  * 动作处理器的执行现场。
  *
- * 引擎只提供 [env] / [data] 与动作名 —— **宿主能力（toast / 导航 / 权限）由调用方在
+ * 引擎只提供 [env] / [data] / 动作名 / [args] —— **宿主能力（toast / 导航 / 权限）由调用方在
  * `actions { }` 的闭包里捕获**（`on("x") { toast("ok") }`，`toast` 是宿主作用域的函数）。
  *
  * 这是刻意的：多一个 `ActionHost` 接口，就多一层每个宿主都要实现的抽象，
  * 而闭包捕获已经够用。
+ *
+ * ## 实参
+ *
+ * `action.removeAt(2)` 里的 `2` 求值后按书写顺序进 [args] —— 在行上下文里
+ * （`<Foreach item="item">`）写 `action.removeAt(index)` 拿到的是**这一行**的下标。
+ * 实参是值不是引用：动作拿到的是点击那一刻求出来的结果。
+ *
+ * 类型化读取（[stringArg] / [longArg] …）走的是与属性槽位**同一套** `TypeAdapter`，
+ * 只是收敛失败时返回默认值而不抛 —— 动作里读错一个实参不该让整页崩。
  */
 class ActionScope(
     val env: Env,
     val data: DataObject,
     val name: String,
-)
+    /** 实参，按书写顺序。无参调动作为空表。 */
+    val args: List<Value> = emptyList(),
+) {
+
+    /** 实参个数。宿主据此区分「`action.x()` 还是 `action.x(v)`」。 */
+    val arity: Int get() = args.size
+
+    /** 第 [index] 个实参；越界返回 [Absent]（与读不到字段同一约定，不是 `null`）。 */
+    fun arg(index: Int): Value = args.getOrNull(index) ?: Absent
+
+    fun stringArg(index: Int, default: String = ""): String = coerceArg(index, StringAdapter, default)
+
+    fun longArg(index: Int, default: Long = 0L): Long = coerceArg(index, LongAdapter, default)
+
+    fun intArg(index: Int, default: Int = 0): Int = coerceArg(index, IntAdapter, default)
+
+    fun doubleArg(index: Int, default: Double = 0.0): Double = coerceArg(index, DoubleAdapter, default)
+
+    fun booleanArg(index: Int, default: Boolean = false): Boolean =
+        coerceArg(index, BooleanAdapter, default)
+
+    /**
+     * 收敛失败（缺参、类型不符）一律降级为 [default]。
+     *
+     * 不抛是因为动作已经在「用户点了一下」的时刻执行，此时抛错只能炸掉宿主事件循环，
+     * 对定位问题没有帮助 —— 而「读到默认值」的表现（比如删了第 0 行）是可见的。
+     */
+    private fun <T> coerceArg(index: Int, adapter: TypeAdapter<T>, default: T): T = try {
+        adapter.coerce(arg(index), AttrSite(tag = null, attribute = "实参 #$index"))
+    } catch (_: CoerceException) {
+        default
+    }
+}
 
 /**
  * 一个动作处理器。**同步**。
@@ -130,8 +179,10 @@ internal class ActionObject : DataObject() {
     fun register(actions: Actions) {
         val current = scope ?: return
         for ((name, handler) in actions.handlers) {
-            members[name] = Function { _, _ ->
-                handler.run(ActionScope(current.env, current.data, name))
+            // args 必须一路带到这里：`action.removeAt(i)` 的 `i` 在 XML 求值时已经算好，
+            // 曾经在这里被 `_` 丢掉，于是「删第 N 行」只能靠脚本自己改数据
+            members[name] = Function { _, args ->
+                handler.run(ActionScope(current.env, current.data, name, args))
                 null
             }
         }

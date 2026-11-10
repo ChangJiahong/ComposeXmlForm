@@ -10,6 +10,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import cn.changjiahong.composexmlform.ComposeXmlForm
+import cn.changjiahong.composexmlform.engine.diag.Code
+import cn.changjiahong.composexmlform.engine.diag.Diagnostic
 import cn.changjiahong.composexmlform.engine.node.Attr
 import cn.changjiahong.composexmlform.engine.node.AttrSlot
 import cn.changjiahong.composexmlform.engine.node.ChildRule
@@ -293,6 +295,74 @@ class DynamicLayoutTest {
         )
         assertTrue(result.hasErrors)
         assertTrue(result.diagnostics.any { it.message.contains("Txt") })
+    }
+
+    @Test
+    fun actionReceivesArgumentsFromXml() = runComposeUiTest {
+        // 实参一路从 XML 求值 → Function → ActionScope 传下来。
+        // 曾经在 ActionObject.register 里被丢掉，于是「删这一行」只能靠脚本改数据。
+        val data = dataOf()
+        setContent {
+            DynamicLayout(
+                xml = """
+                    <Column>
+                        <Button text='取参' onClick='@{ action.pick(1, "x", true) }'/>
+                    </Column>
+                """.trimIndent(),
+                data = data,
+                actions = actions {
+                    on("pick") {
+                        data.set("n", longArg(0))
+                        data.set("s", stringArg(1))
+                        data.set("b", booleanArg(2))
+                        data.set("arity", arity.toLong())
+                    }
+                },
+                scriptMode = ScriptMode.Full,
+            )
+        }
+
+        onNodeWithText("取参").performClick()
+        waitForIdle()
+
+        assertEquals(1L, data.getLong("n"))
+        assertEquals("x", data.getString("s"))
+        assertTrue(data.getBoolean("b"))
+        assertEquals(3L, data.getLong("arity"))
+    }
+
+    @Test
+    fun previewReportsRenderDiagnostics() = runComposeUiTest {
+        val data = dataOf(mapOf("name" to "x"))
+        val tree = ComposeXmlForm.parse("""<Column><Text value="{{data.name}}"/></Column>""", data).root!!
+
+        val batches = mutableListOf<List<Diagnostic>>()
+        setContent {
+            preview(
+                node = tree,
+                data = data,
+                // 不装内置组件：Column / Text 都没有渲染器，渲染期必然降级
+                registry = ComposeXmlForm.createRegistry(includeDefaults = false),
+                onDiagnostics = { batches += it },
+            )
+        }
+        waitForIdle()
+
+        assertTrue(batches.isNotEmpty(), "首帧必须回调一次")
+        assertTrue(batches.last().any { it.code == Code.MissingRenderer })
+    }
+
+    @Test
+    fun previewReportsEmptyBatchWhenEverythingResolves() = runComposeUiTest {
+        val data = dataOf(mapOf("name" to "x"))
+        val tree = ComposeXmlForm.parse("""<Column><Text value="{{data.name}}"/></Column>""", data).root!!
+
+        val batches = mutableListOf<List<Diagnostic>>()
+        setContent { preview(node = tree, data = data, onDiagnostics = { batches += it }) }
+        waitForIdle()
+
+        assertEquals(1, batches.size, "没有新诊断时不该反复回调")
+        assertTrue(batches.single().isEmpty())
     }
 
     @Test
