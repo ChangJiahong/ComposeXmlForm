@@ -72,6 +72,9 @@ enum class Code {
     /** 求值期错误：类型不匹配、`Absent` 参与运算、在属性上下文调挂起函数… */
     ScriptRuntime,
 
+    /** 当前 `ScriptMode` 档位不允许这种写法（`{}` / `@{}` / 赋值 / `await`）。 */
+    ScriptNotAllowed,
+
     // ── ⑦ 子节点 ──────────────────────────────────────────────
     /** `ChildRule.None` 的节点收到了子节点。 */
     ChildNotAllowed,
@@ -81,6 +84,9 @@ enum class Code {
 
     /** `ChildRule.Only` 不允许该标签。 */
     ChildTagMismatch,
+
+    /** 节点构造函数抛了异常（宿主注册的 `create` 有 bug）。 */
+    NodeConstruction,
 
     // ── ⑧ 渲染 ────────────────────────────────────────────────
     /** 有节点类型但没有对应渲染器。 */

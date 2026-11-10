@@ -3,18 +3,20 @@ package cn.changjiahong.composexmlform.engine.node
 /**
  * 一种标签的完整声明：名字、属性表、子节点规则、构造函数。
  *
- * 构造契约是 `(AttrSet, children)`（N-1），**不引入 `NodeSpec`**：
+ * 构造契约是 `(id, AttrSet, children)`（N-1），**不引入 `NodeSpec`**：
  * 属性按需从 [AttrSet] 里取，缺失 / 默认 / 必填在取的时候处理，
  * 不需要先攒一个「属性大对象」再传给节点 —— 那层中间对象只是把参数搬了一遍。
  *
- * [create] 由宿主在注册节点类型时提供。它拿到的 `children` 已经过 [childRule] 校验，
- * 所以实现里可以直接按位置假设子节点存在。
+ * [create] 的第一个参数是**结构化 id**（N-5）。id 由解析器按树位置生成
+ * （`0` / `0.1` / `0.1.2`），节点自己无从知道它在树里的位置，所以必须由外部传入。
+ *
+ * [create] 拿到的 `children` 已经过 [childRule] 校验，实现里可以直接按位置假设子节点存在。
  */
 class NodeType(
     val tag: String,
     val attributes: List<AttrDef<*>> = emptyList(),
     val childRule: ChildRule = ChildRule.None,
-    val create: (AttrSet, List<Node>) -> Node,
+    val create: (id: String, attrs: AttrSet, children: List<Node>) -> Node,
 ) {
 
     fun defOf(name: String): AttrDef<*>? = attributes.firstOrNull { it.name == name }

@@ -21,6 +21,10 @@ import cn.changjiahong.composexmlform.engine.value.TypeAdapter
  *
  * [default] 是**声明级**默认值，优先于 [TypeAdapter.default] 的类型空值：
  * `Attr.int("size", default = 14L)` 缺省就是 14，而不是「没值」。
+ *
+ * [structural] 标记「结构属性」：它的值不是数据，而是**在本节点子树上生效的名字**
+ * （`Foreach` 的 `item` / `index` / `key`）。解析期只收裸标识符（N-2），
+ * 并在解析子节点之前压进作用域栈（第 12 轮）。
  */
 class AttrDef<T>(
     val name: String,
@@ -28,6 +32,7 @@ class AttrDef<T>(
     val required: Boolean = false,
     val default: T? = null,
     val writable: Boolean = false,
+    val structural: Boolean = false,
 ) {
 
     /** 声明期常量（A-2）：槽位是不是函数，只有这里知道 —— Kotlin 泛型运行期擦除。 */
@@ -50,8 +55,12 @@ class AttrDef<T>(
  */
 object Attr {
 
-    fun string(name: String, required: Boolean = false, default: String? = null): AttrDef<String> =
-        AttrDef(name, StringAdapter, required, default)
+    fun string(
+        name: String,
+        required: Boolean = false,
+        default: String? = null,
+        structural: Boolean = false,
+    ): AttrDef<String> = AttrDef(name, StringAdapter, required, default, structural = structural)
 
     fun int(name: String, required: Boolean = false, default: Long? = null): AttrDef<Long> =
         AttrDef(name, LongAdapter, required, default)
@@ -77,7 +86,8 @@ object Attr {
         type: TypeAdapter<T>,
         required: Boolean = false,
         default: T? = null,
-    ): AttrDef<T> = AttrDef(name, type, required, default)
+        structural: Boolean = false,
+    ): AttrDef<T> = AttrDef(name, type, required, default, structural = structural)
 
     /** 可写槽位（`VarAttr`）：只接受 `{{path}}`，渲染层会回写。 */
     fun <T> varOf(name: String, type: TypeAdapter<T>, default: T? = null): AttrDef<T> =

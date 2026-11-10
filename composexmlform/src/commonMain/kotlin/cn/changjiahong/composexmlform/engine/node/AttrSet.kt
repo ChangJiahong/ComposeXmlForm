@@ -49,6 +49,14 @@ class AttrSet internal constructor(
      */
     fun <T> attr(def: AttrDef<T>): AttrSlot<T> {
         consumed += def.name
+        return slotFor(def)
+    }
+
+    /**
+     * 真正的取槽位与校验。`attr()` 与 [finish] 都走这里 ——
+     * 后者补测「声明了但 `create` 没读」的属性。
+     */
+    private fun <T> slotFor(def: AttrDef<T>): AttrSlot<T> {
         val entry = entries[def.name]
         val ref = entry?.ref ?: AttrRef.Absent
         val site = AttrSite(tag, def.name, entry?.span ?: span)
@@ -86,12 +94,23 @@ class AttrSet internal constructor(
     }
 
     /**
-     * 构造结束时收尾：仍有未声明也未消费的属性 → `UnknownAttribute`。
+     * 构造结束时收尾，两件事：
      *
-     * 已声明但没被 `attr()` 读的**不报**：声明了却没用到，是节点实现自己的事，
+     * 1. **补测没被读过的声明**。写法矩阵与必填检查不能因为 `create` 漏读就静默失效 ——
+     *    校验是引擎的责任，不该依赖宿主把每条 `AttrDef` 都用一遍。
+     *    放在这里而不是构造 `AttrSet` 时，是因为 `create` 之前无法知道哪些会被读。
+     * 2. 仍有**未声明也未消费**的属性 → `UnknownAttribute`。
+     *
+     * 已声明但没被 `attr()` 读的**不报未知**：声明了却没用到，是节点实现自己的事，
      * 报成「未知属性」会误导（属性明明是它自己声明的）。
+     *
+     * 两件事都不重复报：第 1 步只处理 `!in consumed` 的，第 2 步只处理 `!in declared` 的。
      */
     fun finish() {
+        for (def in declared) {
+            if (def.name !in consumed) slotFor(def)
+        }
+
         if (entries.isEmpty()) return
         val known = declared.mapTo(HashSet(declared.size)) { it.name }
 

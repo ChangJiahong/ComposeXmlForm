@@ -229,5 +229,5 @@ class NodeTest {
     }
 
     private fun nodeType(tag: String, attrs: List<AttrDef<*>> = emptyList()): NodeType =
-        NodeType(tag, attrs) { _, _ -> object : Node(NodeIds.root()) {} }
+        NodeType(tag, attrs) { id, _, _ -> object : Node(id) {} }
 }
