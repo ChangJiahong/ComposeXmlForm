@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.NonSkippableComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -40,7 +41,22 @@ import cn.changjiahong.composexmlform.engine.value.Value
  * 能力边界（别假设更多）：**缺渲染器能兜**（就是这里的分支）；**渲染器内部同步抛错兜不住** ——
  * Compose 编译器明确禁止 `try/catch` 包裹 composable 调用。所以这里的降级是
  * 「缺失渲染器的局部降级 + 诊断」，不是「永不崩」。
+ *
+ * ### 为什么这个函数不可跳过（[NonSkippableComposable]）
+ *
+ * 引擎把局部变量写在**槽位**里，而槽位的写入发生在组合期（`Env.define`，
+ * `Foreach` 每行一次、`WithEnv` 每层一次）。这种写入不能指望 Compose 用它去唤醒
+ * 下游：下游的参数（`node` / `env`）一点没变，Compose 完全可能整片跳过，
+ * 于是槽位里已经是新值、界面还挂着旧值。施工期真的踩到了 —— 删掉 `Foreach` 的第一行，
+ * 数据删了、界面还是那一行，而且是否复现取决于那一帧里「写入」与「跳过」谁先发生。
+ *
+ * 关掉跳过把它变回确定性行为：父级重跑一次，子节点必然重读一次。
+ * 代价是失去「父组件重跑 ⇒ 未变的子树跳过」，换来「界面 = 当前数据」这条硬保证。
+ * 表单量级（10KB XML、几百节点）下，少跳过的开销远小于一次
+ * 「数据和界面对不上」的排查成本；真要省，该省的是**无辜的重组**（读即订阅已经做到了），
+ * 而不是省掉「重跑之后的重读」。
  */
+@NonSkippableComposable
 @Composable
 fun RenderNode(node: Node, env: Env = LocalEnv.current) {
     val renderer = LocalRenderers.current.rendererFor(node)

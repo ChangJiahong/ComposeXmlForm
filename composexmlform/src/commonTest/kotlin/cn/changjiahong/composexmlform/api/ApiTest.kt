@@ -260,62 +260,49 @@ class DynamicLayoutTest {
     }
 
     /**
-     * 动作增删列表 → `Foreach` 行数跟着变。
+     * 增删列表**不需要注册任何动作**：`append(new())` / `remove(i)` 就是普通表达式。
      *
-     * 覆盖的是「XML 里的按钮改数据」这条最常用路径：`data.list(...)` 发 `DataChange`
-     * 并且结构版本是快照状态，所以增删之后行会重建。`removeAt(i)` 的实参来自
-     * `<Foreach index="i">`，点第几行就删第几行。
+     * 这条用例守的是「模板能自给自足」这个边界：宿主没参与、`actions` 是默认的
+     * `Actions.Empty`，点按钮照样能改数据并让 `Foreach` 重建行。
      */
     @Test
-    fun actionAddsAndRemovesRows() = runComposeUiTest {
+    fun expressionsAddAndRemoveRowsWithoutActions() = runComposeUiTest {
         val data = dataOf(
             mapOf(
-                "list" to listOf(
-                    mapOf("id" to 1L, "name" to "第一"),
-                    mapOf("id" to 2L, "name" to "第二"),
-                ),
+                "list" to listOf(mapOf("id" to 1L, "name" to "第一")),
             ),
         )
-        val actionSet = actions {
-            on("add") {
-                val rows = data.list("list")
-                val next = rows.size + 1
-                rows.add(mapOf("id" to next.toLong(), "name" to "新增$next"))
-            }
-            on("removeAt") { data.list("list").removeAt(intArg(0)) }
-        }
 
         setContent {
             DynamicLayout(
                 xml = """
                     <Column>
-                        <Button text="添加" onClick="@{ action.add() }"/>
-                        <Foreach source="{{data.list}}" item="row" index="i" key="id">
+                        <Button text="添加" onClick="@{ data.list.append(new()) }"/>
+                        <Foreach source="{{data.list}}" item="row" index="i">
                             <Column>
-                                <Text value="{{row.name}}"/>
-                                <Button text="删除" onClick="@{ action.removeAt(i) }"/>
+                                <Text value="{ row.name ?: '（新行）' }"/>
+                                <Button text="删除" onClick="@{ data.list.remove(i) }"/>
                             </Column>
                         </Foreach>
                     </Column>
                 """.trimIndent(),
                 data = data,
-                actions = actionSet,
             )
         }
 
-        assertEquals(2, data.list("list").size)
+        assertEquals(1, data.list("list").size)
 
         onNodeWithText("添加").performClick()
         waitForIdle()
-        assertEquals(3, data.list("list").size)
-        onNodeWithText("新增3").assertExists()
+        assertEquals(2, data.list("list").size)
+        onNodeWithText("（新行）").assertExists()
 
-        // 第一行的「删除」：删完「第一」应当消失，后加的那条还在
+        // 第一行的「删除」：`i` 是这一行的下标，删完「第一」消失、新行还在
         onAllNodesWithText("删除")[0].performClick()
         waitForIdle()
-        assertEquals(2, data.list("list").size)
+        assertEquals(1, data.list("list").size)
         onNodeWithText("第一").assertDoesNotExist()
-        onNodeWithText("新增3").assertExists()
+        onNodeWithText("（新行）").assertExists()
     }
 
     @Test

@@ -111,13 +111,15 @@ private fun RenderForeach(node: ForeachNode) {
  * 三层身份一起保证「元素换了但行没换」时状态不丢：
  *
  * ```
- * key(rowKey)                      ← 行身份：rowKey 不变就不重建状态组
+ * key(rowKey)                      ← 行身份
  *   remember(parent) { child() }   ← env 只在行首次组合时建一次
  *     list.get(index)              ← 元素值在这里读 → 只订阅**这一个元素**
  * ```
  *
- * 元素值变化只让这一行重组（`list.get` 是字段级订阅），行 env 不动 ——
- * 这正是 `@{}` 捕获不失效的原因（R-2）。
+ * 行身份默认是**元素本身**（见 [rowKeyOf]），所以「这一条被删了」等价于
+ * 「这一组不存在了」，Compose 会直接销毁它，不需要靠任何失效传播去纠正。
+ * 元素换了实例 → 新的一组 → 内层状态自然重建；元素里的**字段**变了则实例不变，
+ * 只有读到那个字段的节点重组 —— 这正是 `@{}` 捕获不失效的原因（R-2）。
  *
  * 反过来，旧实现把 `element` 放进 `remember` 的 key，元素一换 env 就重建，
  * 行内事件处理器捕获的上下文随之失效，动画期间点击会拿到旧值。
@@ -133,11 +135,12 @@ private fun ForeachRow(
     origin: Path?,
 ) {
     val element = list.get(index)
+    val itemOrigin = origin?.child(index.toString())
 
     val rowEnv = remember(parent) { parent.child() }
 
     if (itemName.isNotEmpty()) {
-        rowEnv.define(itemName, element, origin = origin?.child(index.toString()))
+        rowEnv.define(itemName, element, origin = itemOrigin)
     }
     if (indexName.isNotEmpty()) {
         rowEnv.define(indexName, index.toLong(), mutable = false)
@@ -146,14 +149,23 @@ private fun ForeachRow(
     RenderChildren(node, rowEnv)
 }
 
+
 /**
  * 行 key。
  *
- * 优先用 `key="id"` 指定的字段；拿不到（元素不是对象 / 没有这个字段 / 是 `Absent`）
- * 就退回下标 —— 「有 id 用 id，没有就先按位置」比「整列表退化成按位置」好得多。
+ * | 写了 `key="id"` | 没写 |
+ * | --- | --- |
+ * | 用元素里那个字段 | 用**元素本身** |
  *
- * 重复 key 会让 Compose 抛「Key was already used」。数据里真出现两条同 id 时，
- * 退到下标并报一条诊断：界面还能用，问题也看得见。
+ * 默认不用下标，是因为下标会随增删错位：删掉第 0 条之后，「下标 0 那一行」换成了
+ * 另一条数据，但它的参数一个都没变 —— Compose 会跳过这一组，而它订阅的是
+ * 「被删掉的那个元素的状态」，那个状态已经不在数组里，永远不会再变。
+ * 表现就是「数据删了、界面还是旧的那行」，而且靠再等一帧也修不回来。
+ * 元素实例才是这一行的身份，用它能直接得出「这一组不存在了」。
+ *
+ * 拿不到可用 key 时（元素是 `Absent` / `null`、对象里没有那个字段、或者两个元素相等）
+ * 退回下标 —— 「有 key 用 key，没有就先按位置」比「整列表崩掉」好得多；
+ * 重复 key 会让 Compose 抛「Key was already used」，所以用 `used` 记着，撞了就退。
  */
 private fun rowKeyOf(
     list: DataArray,
@@ -161,13 +173,10 @@ private fun rowKeyOf(
     keyBy: String?,
     used: MutableSet<Any>,
 ): Any? {
-    if (keyBy == null) return index
-
     val element = list.get(index)
-    val raw = (element as? DataObject)?.member(keyBy)
-    val key = if (raw == null || raw === Absent) null else raw
+    val raw = if (keyBy == null) element else (element as? DataObject)?.member(keyBy)
 
-    if (key == null) return index
-    if (!used.add(key)) return index
-    return key
+    if (raw == null || raw === Absent) return index
+    if (!used.add(raw)) return index
+    return raw
 }

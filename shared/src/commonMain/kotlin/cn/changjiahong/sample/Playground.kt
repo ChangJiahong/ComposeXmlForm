@@ -117,16 +117,19 @@ private val PLAYGROUND_XML = """
     </If>
 
     <Text value="联系人" fontSize="16" fontWeight="bold" />
+    <!-- 增删都是表达式：new() 造空对象、append 追加、remove(i) 按下标删。
+         不需要注册 action，也不需要先在别处定义函数。 -->
     <Row spacing="8">
-        <Button text="添加联系人" onClick="@{ action.addContact() }" />
-        <Button text="删除末尾" onClick="@{ action.removeLast() }" />
+        <Button text="添加联系人" onClick="@{ data.contacts.append(new()) }" />
+        <Button text="删除末尾" onClick="@{ data.contacts.remove(data.contacts.size() - 1) }" />
     </Row>
-    <Foreach source="{{data.contacts}}" item="item" index="i" key="id">
+    <!-- 没写 key：new() 建出来的行没有 id，混用 id 与下标做 key 反而更难预料 -->
+    <Foreach source="{{data.contacts}}" item="item" index="i">
         <Column spacing="8" padding="12" backgroundColor="#F3F4F6">
             <Row spacing="8" verticalAlignment="center">
-                <Text value="{{item.name}}" fontWeight="bold" />
-                <!-- i 是这一行的下标，作为实参传给动作 -->
-                <Button text="删除" onClick="@{ action.removeAt(i) }" />
+                <Text value="{ item.name ?: '（新联系人）' }" fontWeight="bold" />
+                <!-- i 是这一行的下标 -->
+                <Button text="删除" onClick="@{ data.contacts.remove(i) }" />
             </Row>
             <TextField label="电话" value="{{item.phone}}" />
         </Column>
@@ -160,11 +163,11 @@ private fun playgroundInitialData(): Map<String, Any?> = mapOf(
 )
 
 /**
- * 追加一条联系人。XML 按钮（`action.addContact()`）与数据页按钮共用同一个实现。
+ * 追加一条联系人。**只给数据页用** —— 模板里的「添加联系人」是
+ * `@{ data.contacts.append(new()) }`，走表达式，不经过这里。
  *
- * id 取「现有最大 id + 1」而不是 `size` 或随机数：`Foreach key="id"` 用 id 做行 key，
- * 一旦撞 id，两行会共用同一份 composition 状态 —— 表现是「删掉第 0 行，第 1 行的输入框
- * 内容跳到了第 0 行」。删过中间几条之后 `size` 必然撞上已有 id，所以只能看最大值。
+ * 数据页要带 id 是因为它在 Kotlin 侧，能算出「现有最大 id + 1」；模板里算不了
+ * （没有 `maxOf`，`ExpressionsOnly` 也不许声明变量），所以模板那侧的行没有 id。
  */
 private fun DataObject.addContact() {
     val contacts = list("contacts")
@@ -323,13 +326,6 @@ private fun WidePlayground(
             on("login") { data.set("isLogin", true) }
             on("logout") { data.set("isLogin", false) }
             on("submit") { data.set("submitCount", data.getInt("submitCount") + 1) }
-            on("addContact") { data.addContact() }
-            // 实参来自 `<Foreach index="i">`：点是哪一行，拿到的就是哪一行的下标
-            on("removeAt") { data.list("contacts").removeAt(intArg(0)) }
-            on("removeLast") {
-                val contacts = data.list("contacts")
-                if (contacts.size > 0) contacts.removeAt(contacts.size - 1)
-            }
         }
     }
 
@@ -389,12 +385,6 @@ private fun CompactPlayground(
             on("submit") {
                 data.set("submitCount", data.getInt("submitCount") + 1)
                 scope.launch { pager.animateScrollToPage(PAGE_DATA) }
-            }
-            on("addContact") { data.addContact() }
-            on("removeAt") { data.list("contacts").removeAt(intArg(0)) }
-            on("removeLast") {
-                val contacts = data.list("contacts")
-                if (contacts.size > 0) contacts.removeAt(contacts.size - 1)
             }
         }
     }
@@ -609,10 +599,6 @@ private fun DataPanel(
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PillButton(text = "加联系人", onClick = { data.addContact() })
-            PillButton(text = "删末尾", onClick = {
-                val contacts = data.list("contacts")
-                if (contacts.size > 0) contacts.removeAt(contacts.size - 1)
-            })
             PillButton(text = "重置数据", onClick = {
                 data.reset(playgroundInitialData())
                 editing = false
