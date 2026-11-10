@@ -8,7 +8,6 @@ import cn.changjiahong.composexmlform.engine.diag.Diagnostic
 import cn.changjiahong.composexmlform.engine.diag.Severity
 import cn.changjiahong.composexmlform.engine.env.Env
 import cn.changjiahong.composexmlform.engine.node.ElseNode
-import cn.changjiahong.composexmlform.engine.node.FnNode
 import cn.changjiahong.composexmlform.engine.node.ForeachNode
 import cn.changjiahong.composexmlform.engine.node.IfNode
 import cn.changjiahong.composexmlform.engine.node.ThenNode
@@ -20,10 +19,10 @@ import cn.changjiahong.composexmlform.engine.value.display
 import cn.changjiahong.composexmlform.engine.value.kindOf
 
 /**
- * 结构节点的渲染器。
+ * 四个结构节点的渲染器。
  *
  * 它们没有任何像素：`If` 决定画哪一支，`Foreach` 决定用哪套局部变量画几遍，
- * `Fn` 给子树绑一个函数，`Then` / `Else` 只是把子节点转出去。真正的组件渲染器由宿主注册。
+ * `Then` / `Else` 只是把子节点转出去。真正的组件渲染器由宿主注册。
  */
 object StructuralRenderers {
 
@@ -37,35 +36,13 @@ object StructuralRenderers {
     /** `<Foreach>`：按数组逐行渲染，每行一层 env。 */
     val Foreach: NodeRenderer<ForeachNode> = NodeRenderer { node -> RenderForeach(node) }
 
-    /** `<Fn>`：把函数绑进新的一层 env，子树可见。 */
-    val Fn: NodeRenderer<FnNode> = NodeRenderer { node -> RenderFn(node) }
-
-    /** 五个渲染器。与 `StructuralTypes.All` 配套使用。 */
+    /** 四个渲染器。与 `StructuralTypes.All` 配套使用。 */
     val All: Renderers = Renderers.of(
         IfNode::class to If,
         ThenNode::class to Then,
         ElseNode::class to Else,
         ForeachNode::class to Foreach,
-        FnNode::class to Fn,
     )
-}
-
-/**
- * `<Fn>`：定义函数 + 渲染子树。
- *
- * 函数体在**定义处**的 env 里求值（`ScriptFunction` 捕获 `ctx.env`），而名字绑在
- * **新的一层**（`WithEnv`）—— 于是函数体看不见自己，递归调用会解析失败而不是栈溢出。
- * 需要递归时把函数名写进 `data` 或交给宿主，这是刻意的边界。
- */
-@Composable
-private fun RenderFn(node: FnNode) {
-    val ctx = rememberEvalContext()
-    val sink = LocalDiagnostics.current
-
-    val name = node.name.renderValue(ctx, sink)?.takeIf { it.isNotEmpty() } ?: return
-    val body = node.body.renderValue(ctx, sink) ?: return
-
-    WithEnv(mapOf(name to body)) { RenderChildren(node) }
 }
 
 @Composable

@@ -260,53 +260,6 @@ class DynamicLayoutTest {
     }
 
     /**
-     * `<Fn>`：函数在 XML 里定义、在子树里调用，不需要注册 action。
-     *
-     * 两个函数一起测：无参的用对象字面量追加，带参的删指定行 —— 后者要能看见
-     * `Foreach` 的 `i`，说明函数体捕获的是定义处的 env，而行内调用时实参按值传进去。
-     */
-    @Test
-    fun fnNodeDefinesFunctionsCallableInSubtree() = runComposeUiTest {
-        val data = dataOf(mapOf("list" to listOf(mapOf("id" to 1L, "name" to "第一"))))
-
-        setContent {
-            DynamicLayout(
-                xml = """
-                    <Column>
-                        <Fn name="add" body="@{ data.list.append({ id: data.list.size() + 1, name: '新增' }) }">
-                        <Fn name="removeAt" body="@{ idx -> data.list.remove(idx) }">
-                            <Row>
-                                <Button text="添加" onClick="@{ add() }"/>
-                            </Row>
-                            <Foreach source="{{data.list}}" item="row" index="i" key="id">
-                                <Column>
-                                    <Text value="{{row.name}}"/>
-                                    <Button text="删" onClick="@{ removeAt(i) }"/>
-                                </Column>
-                            </Foreach>
-                        </Fn>
-                        </Fn>
-                    </Column>
-                """.trimIndent(),
-                data = data,
-            )
-        }
-
-        assertEquals(1, data.list("list").size)
-        onNodeWithText("添加").performClick()
-        waitForIdle()
-        assertEquals(2, data.list("list").size)
-        onNodeWithText("新增").assertExists()
-
-        // 第一行的「删」：实参是这一行的下标
-        onAllNodesWithText("删")[0].performClick()
-        waitForIdle()
-        assertEquals(1, data.list("list").size)
-        onNodeWithText("第一").assertDoesNotExist()
-        onNodeWithText("新增").assertExists()
-    }
-
-    /**
      * 动作增删列表 → `Foreach` 行数跟着变。
      *
      * 覆盖的是「XML 里的按钮改数据」这条最常用路径：`data.list(...)` 发 `DataChange`
