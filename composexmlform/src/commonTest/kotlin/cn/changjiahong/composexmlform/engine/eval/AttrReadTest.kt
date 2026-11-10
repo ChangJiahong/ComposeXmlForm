@@ -92,7 +92,7 @@ class AttrReadTest {
         val ctx = context()
         val slot = slot(Attr.func("onClick"), AttrRef.Lambda(parseLambda("click()")))
 
-        val function = slot.read(ctx)
+        val function = slot.read(ctx)!!
         assertEquals("clicked", function.invoke(null, emptyList()))
     }
 
@@ -102,7 +102,7 @@ class AttrReadTest {
         val ctx = context(data)
         val slot = slot(Attr.func("onClick"), AttrRef.Lambda(parseLambda("data.n = 5")))
 
-        val function = slot.read(ctx)
+        val function = slot.read(ctx)!!
         assertEquals(1L, data.member("n"), "读属性不该执行函数")
 
         function.invoke(null, emptyList())

@@ -25,11 +25,15 @@ import cn.changjiahong.composexmlform.engine.value.Value
  *
  * 收敛（`Value → T`）只有一处：[cn.changjiahong.composexmlform.engine.value.TypeAdapter.coerce]。
  * 字面量不例外 —— 它先过 `type.literal` 变成 `Value`，再和别的路径走同一个收敛口。
+ *
+ * 返回值是 `T?`：**属性可以没有值**（`Attr.int("size")` 缺省就是 `null`）。
+ * 「没写」走 `def.defaultValue()` 且**不抛** —— `required` 缺失已经在解析期报过
+ * `MissingRequiredAttribute`，运行期再抛一次只会把一条可降级的配置问题升级成崩溃。
  */
-fun <T> AttrSlot<T>.read(ctx: EvalContext): T {
+fun <T> AttrSlot<T>.read(ctx: EvalContext): T? {
     val site = site
     val value: Value = when (val ref = this.ref) {
-        AttrRef.Absent -> return absentValue()
+        AttrRef.Absent -> return def.defaultValue()
 
         is AttrRef.Literal -> def.type.literal(ref.raw, site)
 
@@ -72,14 +76,3 @@ fun <T> AttrSlot<T>.readOrNull(ctx: EvalContext): T? =
  */
 fun <T> AttrSlot<T>.readOrDefault(ctx: EvalContext): T? =
     readOrNull(ctx) ?: def.defaultValue()
-
-/**
- * 属性没写时的值。
- *
- * 返回 `T?` 强转而不是「没有默认就抛」：`required` 缺失已经在解析期报过
- * `MissingRequiredAttribute`，运行期再抛一次只会把一条可降级的配置问题升级成崩溃。
- */
-private fun <T> AttrSlot<T>.absentValue(): T {
-    @Suppress("UNCHECKED_CAST")
-    return def.defaultValue() as T
-}

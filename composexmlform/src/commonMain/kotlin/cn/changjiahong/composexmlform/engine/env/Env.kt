@@ -145,6 +145,42 @@ class Env internal constructor(
     /** 按名字取全局对象（`data` / `config` / `action` / 宿主注册的）。 */
     fun global(name: String): Value = globals[name]
 
+    // ── 现场重建 ──────────────────────────────────────────────
+
+    /**
+     * 走 `parent` 到链根。
+     *
+     * 事件处理器重建现场时要用它（R-3）：`@{…}` 执行在**改动那一刻**，需要的全局对象
+     * 是当时的 `data`，所以现场必须挂在根上，而不是挂在「渲染时那一行」的 env 上。
+     */
+    fun root(): Env {
+        var env = this
+        while (true) {
+            val parent = env.parent ?: return env
+            env = parent
+        }
+    }
+
+    /**
+     * 局部绑定的**值快照**，内层遮蔽外层。
+     *
+     * 只收 slot，不收全局对象 —— 全局对象在执行时实时查根 env，快照下来就成了「渲染时的 data」，
+     * 那是错的。
+     */
+    fun captureLocals(): Map<String, Value> {
+        val out = LinkedHashMap<String, Value>()
+        var env: Env? = this
+        while (env != null) {
+            for (name in env.store.names()) {
+                if (!out.containsKey(name)) {
+                    out[name] = env.store.find(name)?.value ?: Absent
+                }
+            }
+            env = env.parent
+        }
+        return out
+    }
+
     // ── 读 ────────────────────────────────────────────────────
 
     /**

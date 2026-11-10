@@ -57,6 +57,19 @@ class NodeTypes private constructor(private val byTag: Map<String, NodeType>) {
 
     fun plus(types: Iterable<NodeType>): NodeTypes = types.fold(this) { acc, type -> acc.plus(type) }
 
+    /**
+     * 合并另一张表（宿主把自己的表与 `StructuralTypes.All` 拼起来时用）。
+     *
+     * 与 [plus] 同一条规则：**重名直接失败**，要覆盖请先 [replacing]。
+     */
+    fun plus(other: NodeTypes): NodeTypes {
+        var merged = this
+        for (tag in other.byTag.keys) {
+            merged = merged.plus(other.byTag.getValue(tag))
+        }
+        return merged
+    }
+
     /** 有意替换一个已有类型（宿主覆盖内置节点）。 */
     fun replacing(type: NodeType): NodeTypes = NodeTypes(byTag + (type.tag to type))
 
