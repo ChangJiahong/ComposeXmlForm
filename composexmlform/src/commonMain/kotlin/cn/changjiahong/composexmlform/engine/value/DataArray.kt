@@ -79,10 +79,16 @@ class DataArray private constructor(
     override fun toString(): String = elements.toString()
 
     companion object {
-        /** 从原始集合构造，逐项规范化。 */
+        /**
+         * 从原始集合构造，逐项规范化。
+         *
+         * 用 [appendRaw] 而不是 [append]：构造期还没有「外部写入」这回事，
+         * `frozen` 只该拦**之后**的写。用 `append` 会让 `DataObject.frozen(mapOf("list" to listOf(…)))`
+         * 在造 config 时就抛 `FrozenWriteException` —— 而它正是最需要能建的那一种。
+         */
         fun ofValues(values: Iterable<Value>, frozen: Boolean = false): DataArray {
             val array = DataArray(frozen)
-            for (v in values) array.append(v)
+            for (v in values) array.appendRaw(normalize(v, frozen))
             return array
         }
     }

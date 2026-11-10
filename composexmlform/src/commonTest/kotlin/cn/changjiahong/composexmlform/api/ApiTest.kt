@@ -332,6 +332,29 @@ class DynamicLayoutTest {
     }
 
     @Test
+    fun selectReadsOptionsFromFrozenConfig() = runComposeUiTest {
+        // config 里放嵌套数组是最常见的用法（下拉选项）。它必须能建出一棵冻结树 ——
+        // 否则 DynamicLayout 在 buildParseEnv 阶段就抛 FrozenWriteException，
+        // 表现为「窗口打开了但预览区什么都没有」，正是测试台第一次跑起来的那个样子。
+        val data = dataOf(mapOf("region" to "BJ"))
+        setContent {
+            DynamicLayout(
+                xml = """<Column><Select label="城市" options="{{config.regions}}" value="{{region}}"/></Column>""",
+                data = data,
+                config = mapOf(
+                    "regions" to listOf(
+                        mapOf("label" to "北京", "value" to "BJ"),
+                        mapOf("label" to "上海", "value" to "SH"),
+                    ),
+                ),
+            )
+        }
+
+        onNodeWithText("城市").assertExists()
+        onNodeWithText("北京").assertExists()   // 选中项从 options 里匹配出来
+    }
+
+    @Test
     fun previewReportsRenderDiagnostics() = runComposeUiTest {
         val data = dataOf(mapOf("name" to "x"))
         val tree = ComposeXmlForm.parse("""<Column><Text value="{{data.name}}"/></Column>""", data).root!!

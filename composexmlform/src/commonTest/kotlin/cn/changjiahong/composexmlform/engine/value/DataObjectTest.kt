@@ -214,6 +214,38 @@ class DataObjectTest {
         }
     }
 
+    /**
+     * 冻结对象必须**建得出来**：`frozen` 只该拦之后的写，不该拦构造期的规范化。
+     *
+     * `DataArray.ofValues` 曾经走 `append`，于是 `config` 里只要有一个嵌套数组，
+     * 建 config 的时候就抛 `FrozenWriteException` —— 而 `config` 里放数组是最常见的用法
+     * （下拉选项、默认列表）。这个用例守的就是那条路。
+     */
+    @Test
+    fun frozenObjectAcceptsNestedListAndObject() {
+        val config = DataObject.frozen(
+            mapOf(
+                "regions" to listOf(mapOf("label" to "北京", "value" to "BJ")),
+                "tags" to listOf("a", "b"),
+                "nested" to mapOf("list" to listOf(1, 2)),
+            ),
+        )
+
+        val regions = config.member("regions") as DataArray
+        assertEquals(1, regions.size)
+        assertEquals("BJ", (regions.get(0) as DataObject).member("value"))
+        assertEquals(2, (config.member("tags") as DataArray).size)
+        assertEquals(2L, ((config.member("nested") as DataObject).member("list") as DataArray).get(1))
+
+        // 建得出来，但仍然是只读的
+        kotlin.test.assertFailsWith<cn.changjiahong.composexmlform.engine.diag.FrozenWriteException> {
+            regions.append("SH")
+        }
+        kotlin.test.assertFailsWith<cn.changjiahong.composexmlform.engine.diag.FrozenWriteException> {
+            (config.member("nested") as DataObject).setMember("x", 1)
+        }
+    }
+
     @Test
     fun nullValueIsStoredNotAbsent() {
         val data = dataObjectOf()
