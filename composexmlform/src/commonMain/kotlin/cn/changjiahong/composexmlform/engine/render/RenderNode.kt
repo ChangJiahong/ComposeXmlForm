@@ -59,14 +59,16 @@ import cn.changjiahong.composexmlform.engine.value.Value
 @NonSkippableComposable
 @Composable
 fun RenderNode(node: Node, env: Env = LocalEnv.current) {
-    val renderer = LocalRenderers.current.rendererFor(node)
+    // 本行现场：属性委托要 `node.value` 直接是值，就得先绑定（见 Bindable）
+    val bound = rememberBound(node, env)
+    val renderer = LocalRenderers.current.rendererFor(bound)
 
     if (renderer == null) {
         val diagnostic = Diagnostic(
             severity = Severity.Error,
             code = Code.MissingRenderer,
-            message = "没有为节点类型 ${node::class.simpleName} 注册渲染器",
-            tag = node::class.simpleName,
+            message = "没有为节点类型 ${bound::class.simpleName} 注册渲染器",
+            tag = bound::class.simpleName,
         )
         val sink = LocalDiagnostics.current
         // SideEffect：组合可能因重组重复执行，诊断上报是副作用，放到应用之后
@@ -77,10 +79,10 @@ fun RenderNode(node: Node, env: Env = LocalEnv.current) {
     }
 
     if (env === LocalEnv.current) {
-        renderer.Render(node)
+        renderer.Render(bound)
     } else {
         CompositionLocalProvider(LocalEnv provides env) {
-            renderer.Render(node)
+            renderer.Render(bound)
         }
     }
 }

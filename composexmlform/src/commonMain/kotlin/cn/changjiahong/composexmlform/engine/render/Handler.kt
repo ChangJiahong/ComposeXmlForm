@@ -59,7 +59,10 @@ fun AttrSlot<Function>.rememberHandler(ctx: EvalContext = rememberEvalContext())
     return remember(ctx, captured) { buildHandler(ctx, captured, sink) }
 }
 
-private fun AttrSlot<Function>.buildHandler(
+/**
+ * 纯函数版：给「自己记忆化」的调用方用（属性委托不走 composition，没有 `remember`）。
+ */
+internal fun AttrSlot<Function>.buildHandler(
     ctx: EvalContext,
     captured: Map<String, Value>,
     sink: DiagnosticSink,
