@@ -45,7 +45,7 @@ class ParseResult(
  * [types] 是标签表；未注册的标签会被报错并跳过该子树。
  * [mode] 控制脚本能力档位（P-7），默认 [ScriptMode.ExpressionsOnly]。
  */
-fun parse(
+internal fun parse(
     xml: String,
     schema: EnvSchema,
     types: NodeTypes,

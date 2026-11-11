@@ -1,7 +1,5 @@
 package cn.changjiahong.composexmlform.engine.render
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import cn.changjiahong.composexmlform.engine.eval.EvalContext
 import cn.changjiahong.composexmlform.engine.eval.lambdaFunction
 import cn.changjiahong.composexmlform.engine.node.AttrRef
@@ -42,25 +40,12 @@ class EventHandler internal constructor(
 }
 
 /**
- * 把一个函数槽位读成 [EventHandler]。
- *
- * `remember(ctx, captured)` 的两个 key 缺一不可：
- * - `ctx` 变了（换行 env）必须重建，否则新行会执行旧行的上下文；
- * - `captured` 变了必须重建 —— 元素对象被整体替换后，旧的快照指向已经不在列表里的对象，
- *   点了会「改一份没人看的数据」。Map 的相等是内容相等，元素没变时复用，不会每帧新建。
+ * 把一个函数槽位读成 [EventHandler]。**给「自己记忆化」的调用方用**：
+ * 属性委托（`val onClick by props.action("onClick")`）不走 composition，没有 `remember`，
+ * 快照比较与重建由委托自己负责。
  *
  * `captured` 是每帧现算的（[cn.changjiahong.composexmlform.engine.env.Env.captureLocals]），
- * 这会让本组合订阅全部局部变量 —— 正是想要的：它们就是回调的输入。
- */
-@Composable
-fun AttrSlot<Function>.rememberHandler(ctx: EvalContext = rememberEvalContext()): EventHandler? {
-    val sink = LocalDiagnostics.current
-    val captured = ctx.env.captureLocals()
-    return remember(ctx, captured) { buildHandler(ctx, captured, sink) }
-}
-
-/**
- * 纯函数版：给「自己记忆化」的调用方用（属性委托不走 composition，没有 `remember`）。
+ * 读它会让调用方订阅全部局部变量 —— 正是想要的：它们就是回调的输入。
  */
 internal fun AttrSlot<Function>.buildHandler(
     ctx: EvalContext,

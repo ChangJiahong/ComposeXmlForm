@@ -35,7 +35,7 @@ val LocalMethods: ProvidableCompositionLocal<MethodExtensions> = staticCompositi
 }
 
 /** 当前渲染器注册表。 */
-val LocalRenderers: ProvidableCompositionLocal<Renderers> = staticCompositionLocalOf {
+internal val LocalRenderers: ProvidableCompositionLocal<Renderers> = staticCompositionLocalOf {
     Renderers.Empty
 }
 

@@ -17,7 +17,7 @@ import cn.changjiahong.composexmlform.engine.value.Path
  *
  * 读取入口在 `engine.eval` 包（`AttrSlot.read`），不在本包 —— 见 `PLAN.md` S5 的出口条件。
  */
-class AttrSlot<T> internal constructor(
+internal class AttrSlot<T> internal constructor(
     val def: AttrDef<T>,
     internal val ref: AttrRef,
     val site: AttrSite,

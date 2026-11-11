@@ -21,10 +21,10 @@ import cn.changjiahong.composexmlform.engine.value.Value
  */
 
 /** `<If>` 的 then 分支容器。存在只是为了让 `ChildRule.Only` 能指名道姓。 */
-class ThenNode(id: String, children: List<Node>) : ContainerNode(id, children)
+internal class ThenNode(id: String, children: List<Node>) : ContainerNode(id, children)
 
 /** `<If>` 的 else 分支容器。 */
-class ElseNode(id: String, children: List<Node>) : ContainerNode(id, children)
+internal class ElseNode(id: String, children: List<Node>) : ContainerNode(id, children)
 
 /**
  * `<If test="…">`：按布尔值选一支渲染。
@@ -36,7 +36,7 @@ class ElseNode(id: String, children: List<Node>) : ContainerNode(id, children)
  * [test] 是**必填**的：没有条件的 `If` 只能靠默认 `false` 变成「永不渲染的子树」，
  * 那是纯粹的配置错误，解析期就该报。
  */
-class IfNode(
+internal class IfNode(
     id: String,
     val test: AttrSlot<Boolean>,
     val thenBranch: Node?,
@@ -55,7 +55,7 @@ class IfNode(
  * 行 key 决定 Compose 的身份 —— 用 `id` 而不是下标，才能在列表头部插入一条时
  * 保住后续所有行的内部状态（输入框已输入的内容、动画进度）。
  */
-class ForeachNode(
+internal class ForeachNode(
     id: String,
     val source: AttrSlot<Value>,
     val item: AttrSlot<String>,
@@ -69,7 +69,7 @@ class ForeachNode(
  *
  * 宿主把它 `plus` 进自己的 [NodeTypes] 即可；`data` / `action` 之外不需要任何额外配置。
  */
-object StructuralTypes {
+internal object StructuralTypes {
 
     /** `<If test="{{data.ok}}">`。 */
     val Test: AttrDef<Boolean> = Attr.bool("test", required = true)

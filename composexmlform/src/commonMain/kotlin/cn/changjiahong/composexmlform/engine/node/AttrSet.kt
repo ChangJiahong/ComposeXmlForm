@@ -30,7 +30,7 @@ internal class AttrEntry(val ref: AttrRef, val span: Span)
  *
  * 诊断是**收集**而不是抛（D-4）：一个标签上写错三个属性，一次全报出来。
  */
-class AttrSet internal constructor(
+internal class AttrSet internal constructor(
     val tag: String,
     val span: Span,
     private val entries: Map<String, AttrEntry>,

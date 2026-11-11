@@ -1,8 +1,5 @@
 package cn.changjiahong.composexmlform.api
 
-import androidx.compose.foundation.clickable
-import androidx.compose.material3.Text
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onAllNodesWithText
@@ -13,12 +10,7 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import cn.changjiahong.composexmlform.ComposeXmlForm
 import cn.changjiahong.composexmlform.engine.diag.Code
 import cn.changjiahong.composexmlform.engine.diag.Diagnostic
-import cn.changjiahong.composexmlform.engine.node.Attr
-import cn.changjiahong.composexmlform.engine.node.AttrSlot
-import cn.changjiahong.composexmlform.engine.node.ChildRule
-import cn.changjiahong.composexmlform.engine.node.Node
 import cn.changjiahong.composexmlform.engine.parse.ScriptMode
-import cn.changjiahong.composexmlform.engine.render.NodeRenderer
 import cn.changjiahong.composexmlform.engine.value.Absent
 import cn.changjiahong.composexmlform.engine.value.DataObject
 import kotlinx.coroutines.launch
@@ -435,45 +427,4 @@ class DynamicLayoutTest {
         assertTrue(batches.single().isEmpty())
     }
 
-    @Test
-    fun customComponentRendersAndWritesBack() = runComposeUiTest {
-        // 宿主自定义组件：声明属性 → 声明节点 → 一次注册（标签 + 构造器 + 渲染器）。
-        // 这条链路是「引擎不认识任何具体组件」的证明 —— 内置组件走的是同一条路。
-        val registry = ComposeXmlForm.createRegistry {
-            register(
-                nodeClass = StarNode::class,
-                tag = "Stars",
-                attributes = listOf(StarValue),
-                childRule = ChildRule.None,
-                create = { id, attrs, _ -> StarNode(id, attrs.attr(StarValue)) },
-                renderer = NodeRenderer { node ->
-                    val (value, onChange) = node.value.rememberField<Long>()
-                    Text(
-                        text = "星级 ${value ?: 0L}",
-                        modifier = Modifier.clickable { onChange(3L) },
-                    )
-                },
-            )
-        }
-
-        val data = dataOf(mapOf("rating" to 0L))
-        setContent {
-            DynamicLayout(
-                xml = """<Column><Stars value="{{data.rating}}"/></Column>""",
-                data = data,
-                registry = registry,
-            )
-        }
-
-        onNodeWithText("星级 0").assertExists()
-        onNodeWithText("星级 0").performClick()
-        waitForIdle()
-
-        assertEquals(3L, data.getLong("rating"))
-        onNodeWithText("星级 3").assertExists()
-    }
 }
-
-private val StarValue = Attr.varInt("value")
-
-private class StarNode(id: String, val value: AttrSlot<Long>) : Node(id)

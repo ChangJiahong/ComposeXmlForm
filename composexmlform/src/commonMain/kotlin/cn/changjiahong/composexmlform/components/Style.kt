@@ -63,7 +63,7 @@ object DimensionAdapter : TypeAdapter<Dimension> {
 }
 
 /** 六个样式属性的声明。只在这一个文件里出现属性名。 */
-object StyleAttrs {
+internal object StyleAttrs {
 
     val width: AttrDef<Dimension> = Attr.of("width", DimensionAdapter)
 

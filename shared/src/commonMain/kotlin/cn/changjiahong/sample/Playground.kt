@@ -62,7 +62,6 @@ import cn.changjiahong.composexmlform.api.set
 import cn.changjiahong.composexmlform.api.toJson
 import cn.changjiahong.composexmlform.api.decl.Props
 import cn.changjiahong.composexmlform.api.decl.PropsNode
-import cn.changjiahong.composexmlform.api.decl.component
 import cn.changjiahong.composexmlform.components.style
 import cn.changjiahong.composexmlform.components.toColor
 import cn.changjiahong.composexmlform.engine.diag.Diagnostic

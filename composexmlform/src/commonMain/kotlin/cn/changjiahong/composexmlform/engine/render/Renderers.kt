@@ -15,7 +15,7 @@ import kotlin.reflect.KClass
  * （每行不同作用域），`If` 只渲染一支，`Column` 按顺序全画。它们的共同点只有
  * 「某个时刻要画一个子节点」，那就调 `RenderNode`。
  */
-fun interface NodeRenderer<T : Node> {
+internal fun interface NodeRenderer<T : Node> {
 
     @Composable
     fun Render(node: T)
@@ -33,7 +33,7 @@ fun interface NodeRenderer<T : Node> {
  * `KClass.supertypes`（那是 `kotlin-reflect` / JVM 的东西）。真想要兜底，
  * 用 [withFallback] 显式声明一个「谁都认」的渲染器。
  */
-class Renderers private constructor(
+internal class Renderers private constructor(
     private val byType: Map<KClass<*>, NodeRenderer<*>>,
     private val fallback: NodeRenderer<Node>?,
 ) {
@@ -98,10 +98,10 @@ class Renderers private constructor(
 }
 
 /** 声明式写法：`renderers { on(TextNode::class) { … } }`。 */
-fun renderers(block: RenderersBuilder.() -> Unit): Renderers =
+internal fun renderers(block: RenderersBuilder.() -> Unit): Renderers =
     RenderersBuilder().apply(block).build()
 
-class RenderersBuilder internal constructor() {
+internal class RenderersBuilder internal constructor() {
 
     private var current: Renderers = Renderers.Empty
 

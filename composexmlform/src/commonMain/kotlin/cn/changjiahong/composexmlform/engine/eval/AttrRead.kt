@@ -30,7 +30,7 @@ import cn.changjiahong.composexmlform.engine.value.Value
  * 「没写」走 `def.defaultValue()` 且**不抛** —— `required` 缺失已经在解析期报过
  * `MissingRequiredAttribute`，运行期再抛一次只会把一条可降级的配置问题升级成崩溃。
  */
-fun <T> AttrSlot<T>.read(ctx: EvalContext): T? {
+internal fun <T> AttrSlot<T>.read(ctx: EvalContext): T? {
     val site = site
     val value: Value = when (val ref = this.ref) {
         AttrRef.Absent -> return def.defaultValue()
@@ -61,7 +61,7 @@ fun <T> AttrSlot<T>.read(ctx: EvalContext): T? {
  * 给渲染层做「降级为默认值 + `AttributeFallback` 诊断」用（R-4）——
  * 渲染期抛异常会整棵树炸掉，而一个颜色写错了不该让整个页面白屏。
  */
-fun <T> AttrSlot<T>.readOrNull(ctx: EvalContext): T? =
+internal fun <T> AttrSlot<T>.readOrNull(ctx: EvalContext): T? =
     try {
         read(ctx)
     } catch (_: CoerceException) {
@@ -74,5 +74,5 @@ fun <T> AttrSlot<T>.readOrNull(ctx: EvalContext): T? =
  * 注意顺序：先读，读失败才用默认。反过来（缺失就返回默认）会把
  * 「写了但收敛失败」与「没写」混成同一种情况，诊断就报不出来了。
  */
-fun <T> AttrSlot<T>.readOrDefault(ctx: EvalContext): T? =
+internal fun <T> AttrSlot<T>.readOrDefault(ctx: EvalContext): T? =
     readOrNull(ctx) ?: def.defaultValue()

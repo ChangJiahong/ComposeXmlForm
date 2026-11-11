@@ -26,7 +26,7 @@ import cn.changjiahong.composexmlform.engine.value.TypeAdapter
  * （`Foreach` 的 `item` / `index` / `key`）。解析期只收裸标识符（N-2），
  * 并在解析子节点之前压进作用域栈（第 12 轮）。
  */
-class AttrDef<T>(
+internal class AttrDef<T>(
     val name: String,
     val type: TypeAdapter<T>,
     val required: Boolean = false,
@@ -53,7 +53,7 @@ class AttrDef<T>(
  * 刻意不做 `Attr.any()`：`AnyAdapter` 恒返回 `null` 作默认值，等于「这个槽位永远没有默认」，
  * 那是 `Attr.of(name, AnyAdapter)` 就够的表达，多一个快捷方式只会让人以为它有特殊语义。
  */
-object Attr {
+internal object Attr {
 
     fun string(
         name: String,

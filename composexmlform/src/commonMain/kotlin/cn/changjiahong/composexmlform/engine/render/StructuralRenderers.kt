@@ -24,7 +24,7 @@ import cn.changjiahong.composexmlform.engine.value.kindOf
  * 它们没有任何像素：`If` 决定画哪一支，`Foreach` 决定用哪套局部变量画几遍，
  * `Then` / `Else` 只是把子节点转出去。真正的组件渲染器由宿主注册。
  */
-object StructuralRenderers {
+internal object StructuralRenderers {
 
     /** `<If test="…">`：只画一支，另一支**根本不组合** —— 所以它的状态不会留下来（R-6）。 */
     val If: NodeRenderer<IfNode> = NodeRenderer { node -> RenderIf(node) }

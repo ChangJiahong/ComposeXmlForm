@@ -32,7 +32,7 @@ import cn.changjiahong.composexmlform.engine.value.CoerceException
  * 去重由 [DiagnosticSink] 的实现负责（按 `code + tag + attribute`），引擎不做全局去重表
  * （那会变成一个跨 runtime 共享的可变状态）。
  */
-fun <T> AttrSlot<T>.renderValue(
+internal fun <T> AttrSlot<T>.renderValue(
     ctx: EvalContext,
     sink: DiagnosticSink = DiagnosticSink.None,
 ): T? = try {

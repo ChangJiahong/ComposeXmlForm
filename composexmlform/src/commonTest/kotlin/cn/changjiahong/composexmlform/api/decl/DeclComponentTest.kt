@@ -53,6 +53,21 @@ private fun starsRegistry() = ComposeXmlForm.createRegistry {
     component("Stars", create = ::StarsNode, render = ::Stars)
 }
 
+/** 用来覆盖内置 `Text`：属性名不同，画法也不同。 */
+private class FancyTextNode(props: Props) : PropsNode(props) {
+
+    val body by props.string("body", "")
+}
+
+@Composable
+private fun FancyText(node: FancyTextNode) {
+    Text(text = "【${node.body}】")
+}
+
+private fun replacingRegistry() = ComposeXmlForm.createRegistry {
+    component("Text", replace = true, create = ::FancyTextNode, render = ::FancyText)
+}
+
 @OptIn(ExperimentalTestApi::class)
 class DeclComponentTest {
 
@@ -111,6 +126,26 @@ class DeclComponentTest {
 
         onNodeWithText("星级 1 / 3").assertExists()
         assertEquals(0L, data.getLong("rating"), "没绑定就不该写 data")
+    }
+
+    /** `replace = true` 覆盖内置标签：属性表与画法一起换，旧节点类不留在表里。 */
+    @Test
+    fun replaceSwapsBuiltInTag() = runComposeUiTest {
+        val registry = replacingRegistry()
+
+        // 白名单跟着新节点走：`value` / 六个样式属性都不是它的了，只有 `body`
+        assertEquals(listOf("body"), registry.types["Text"]!!.attributes.map { it.name })
+
+        val data = dataOf()
+        setContent {
+            DynamicLayout(
+                xml = """<Column><Text body="hi"/></Column>""",
+                data = data,
+                registry = registry,
+            )
+        }
+
+        onNodeWithText("【hi】").assertExists()
     }
 
     /** 关键一条：`Foreach` 每行绑定自己的 env，点击只回写那一行。 */

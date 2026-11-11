@@ -1,7 +1,6 @@
 package cn.changjiahong.composexmlform.components
 
 import cn.changjiahong.composexmlform.api.ComponentModule
-import cn.changjiahong.composexmlform.api.decl.component
 import cn.changjiahong.composexmlform.engine.node.ChildRule
 
 /**

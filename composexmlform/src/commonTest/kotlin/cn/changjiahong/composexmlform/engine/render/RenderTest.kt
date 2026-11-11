@@ -94,7 +94,7 @@ class RenderTest {
             val ctx = rememberEvalContext(env)
             val sink = LocalDiagnostics.current
             val text = node.text.renderValue(ctx, sink).orEmpty()
-            val handler = node.onClick.rememberHandler(ctx)
+            val handler = node.onClick.buildHandler(ctx, env.captureLocals(), sink)
             if (handler != null) handlers[key] = handler
 
             BasicText(

@@ -1,11 +1,14 @@
 package cn.changjiahong.composexmlform.api
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import cn.changjiahong.composexmlform.ComposeXmlForm
-import cn.changjiahong.composexmlform.engine.node.AttrDef
-import cn.changjiahong.composexmlform.engine.node.AttrSet
+import cn.changjiahong.composexmlform.api.decl.Props
+import cn.changjiahong.composexmlform.api.decl.Schema
+import cn.changjiahong.composexmlform.api.decl.propsOf
+import cn.changjiahong.composexmlform.api.decl.prototypeProps
 import cn.changjiahong.composexmlform.engine.node.ChildRule
 import cn.changjiahong.composexmlform.engine.node.Node
 import cn.changjiahong.composexmlform.engine.node.NodeType
@@ -46,9 +49,12 @@ class EngineRegistry {
     private val renderersState = mutableStateOf(StructuralRenderers.All)
     private val versionState = mutableStateOf(0L)
 
-    val types: NodeTypes get() = typesState.value
+    /** `tag → 节点类`，只为 [component] 的 `replace` 服务：换标签时要把旧类从渲染器表里摘掉。 */
+    private val classByTag = HashMap<String, KClass<*>>()
 
-    val renderers: Renderers get() = renderersState.value
+    internal val types: NodeTypes get() = typesState.value
+
+    internal val renderers: Renderers get() = renderersState.value
 
     /** 每次成功注册加一。读了就订阅。 */
     val version: Long get() = versionState.value
@@ -56,49 +62,56 @@ class EngineRegistry {
     val tags: Set<String> get() = types.tags
 
     /**
-     * 注册一个标签：属性表 + 子节点规则 + 构造器 + 渲染器。
+     * 注册一个组件：**属性、构造、画法一次说完**。
      *
-     * [nodeClass] 显式传而不是从 `T` 里取：Kotlin 的 `T::class` 要求 `reified`，
-     * 而 `reified` 又会把 `register` 变成 `inline`，进而碰不到注册表的私有状态。
-     * 调用处写 `TextNode::class` 只多五个字符，换来的是没有反射、没有 inline 约束。
+     * ```kotlin
+     * registry.component("RatingBar", create = ::RatingBarNode, render = ::RatingBar)
+     * ```
      *
-     * 重名**直接失败**：两张表都按「重名即错误」的规则，这里不额外判断 ——
-     * 让 [NodeTypes.plus] / [Renderers.plus] 抛，消息里已经写清了该怎么换。
+     * 三件事由框架补齐，宿主都不写：
+     *
+     * 1. **属性表**：先用空 [Props] 把节点构造一次，构造期调用的每个 `props.xxx(...)` 都记进声明表
+     *    （`Attr` 对象、`create` 里逐个 `attrs.attr(...)`、构造函数参数三处重复从此消失）；
+     * 2. **节点类型**：`tag` / 属性表 / 子节点规则，一次性登记；
+     * 3. **渲染器**：`render` 就是个 Composable，不用实现 `NodeRenderer`、不用起类名。
+     *
+     * [render] 收到的是**已绑定本行现场**的节点，所以可以直接 `node.value` / `node.value = x`。
+     *
+     * [replace] 用于宿主覆盖已存在的标签（内置的 `Text` 之类）。默认 `false` 时重名**直接失败** ——
+     * 两个 `Text` 同时存在时「谁生效」取决于注册顺序，那是最难查的一类 bug。
      */
-    fun <T : Node> register(
-        nodeClass: KClass<T>,
+    fun <T : Node> component(
         tag: String,
-        attributes: List<AttrDef<*>> = emptyList(),
         childRule: ChildRule = ChildRule.None,
-        create: (id: String, attrs: AttrSet, children: List<Node>) -> T,
-        renderer: NodeRenderer<T>,
+        replace: Boolean = false,
+        create: (Props) -> T,
+        render: @Composable (T) -> Unit,
     ): EngineRegistry {
-        val type = NodeType(tag, attributes, childRule, create)
-        typesState.value = typesState.value.plus(type)
-        renderersState.value = renderersState.value.plus(nodeClass, renderer)
-        versionState.value += 1L
-        return this
-    }
+        val schema = Schema(tag)
+        val prototype = create(prototypeProps(schema))
 
-    /** 有意替换一个已注册的标签（宿主覆盖内置组件）。 */
-    fun <T : Node> replace(
-        nodeClass: KClass<T>,
-        tag: String,
-        attributes: List<AttrDef<*>> = emptyList(),
-        childRule: ChildRule = ChildRule.None,
-        create: (id: String, attrs: AttrSet, children: List<Node>) -> T,
-        renderer: NodeRenderer<T>,
-    ): EngineRegistry {
-        val type = NodeType(tag, attributes, childRule, create)
-        typesState.value = typesState.value.replacing(type)
-        renderersState.value = renderersState.value.replacing(nodeClass, renderer)
-        versionState.value += 1L
-        return this
-    }
+        @Suppress("UNCHECKED_CAST")
+        val nodeClass = prototype::class as KClass<T>
 
-    /** 只换渲染器（标签与属性不动）。 */
-    fun <T : Node> repaint(nodeClass: KClass<T>, renderer: NodeRenderer<T>): EngineRegistry {
-        renderersState.value = renderersState.value.replacing(nodeClass, renderer)
+        val type = NodeType(
+            tag = tag,
+            attributes = schema.decls,
+            childRule = childRule,
+            create = { id, attrs, children -> create(propsOf(schema, id, attrs, children, create)) },
+        )
+        val renderer = NodeRenderer<T> { node -> render(node) }
+
+        if (replace) {
+            // 旧标签的节点类可能和新标签不是同一个：不摘掉的话它会永远留在渲染器表里。
+            classByTag[tag]?.let { old -> renderersState.value = renderersState.value.minus(old) }
+            typesState.value = typesState.value.replacing(type)
+            renderersState.value = renderersState.value.replacing(nodeClass, renderer)
+        } else {
+            typesState.value = typesState.value.plus(type)
+            renderersState.value = renderersState.value.plus(nodeClass, renderer)
+        }
+
+        classByTag[tag] = nodeClass
         versionState.value += 1L
         return this
     }

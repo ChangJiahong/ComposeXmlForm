@@ -12,7 +12,7 @@ package cn.changjiahong.composexmlform.engine.node
  *
  * [create] 拿到的 `children` 已经过 [childRule] 校验，实现里可以直接按位置假设子节点存在。
  */
-class NodeType(
+internal class NodeType(
     val tag: String,
     val attributes: List<AttrDef<*>> = emptyList(),
     val childRule: ChildRule = ChildRule.None,
@@ -34,7 +34,7 @@ class NodeType(
  * 否则「解析时是 Text、渲染时是别的」这种漂移只会在特定时序下复现。
  * 要加类型就 `plus()` 出一份新的，然后重新解析（M-4）。
  */
-class NodeTypes private constructor(private val byTag: Map<String, NodeType>) {
+internal class NodeTypes private constructor(private val byTag: Map<String, NodeType>) {
 
     val tags: Set<String> get() = byTag.keys
 
