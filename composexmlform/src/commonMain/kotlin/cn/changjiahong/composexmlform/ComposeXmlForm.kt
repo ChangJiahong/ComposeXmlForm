@@ -18,8 +18,8 @@ import cn.changjiahong.composexmlform.engine.value.DataObject
  *
  * ```
  * val registry = ComposeXmlForm.createRegistry {
- *     install(DemoComponents)              // 追加
- *     repaint(TextNode::class, MyText())   // 换画法
+ *     component("RatingBar", create = ::RatingBarNode, render = ::RatingBar)   // 追加
+ *     component("Text", replace = true, create = ::MyTextNode, render = ::MyText)  // 覆盖内置
  * }
  *
  * ComposeXmlFormProvider(registry) {       // 根上供给一次
@@ -37,7 +37,7 @@ object ComposeXmlForm {
      *
      * @param includeDefaults 是否装内置组件（`false` 用于「只要骨架」的场景与测试）
      * @param configure 组装 DSL。**在内置组件之后执行**，所以可以直接
-     *   `replace(...)` 覆盖内置，或 `install(DemoComponents)` 追加。
+     *   `component(tag, replace = true, …)` 覆盖内置，或 `component(tag, …)` 追加。
      */
     fun createRegistry(
         includeDefaults: Boolean = true,
