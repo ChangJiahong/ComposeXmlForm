@@ -1,22 +1,10 @@
 package cn.changjiahong.composexmlform.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import cn.changjiahong.composexmlform.engine.node.Attr
 import cn.changjiahong.composexmlform.engine.node.AttrDef
-import cn.changjiahong.composexmlform.engine.node.AttrSet
-import cn.changjiahong.composexmlform.engine.node.AttrSlot
-import cn.changjiahong.composexmlform.engine.render.value
 import cn.changjiahong.composexmlform.engine.value.Absent
 import cn.changjiahong.composexmlform.engine.value.CoerceException
 import cn.changjiahong.composexmlform.engine.value.FloatAdapter
@@ -97,72 +85,6 @@ object StyleAttrs {
         paddingVertical,
         backgroundColor,
     )
-}
-
-/**
- * 一个节点上的样式槽位。
- *
- * 不继承任何基类：`Text` / `Button` / `Column` 分属两条继承链（一个容器的、一个叶子的），
- * 共同点只有「持有一个 BoxStyle」。组合比再抽一层基类便宜。
- */
-class BoxStyle(
-    val width: AttrSlot<Dimension>,
-    val height: AttrSlot<Dimension>,
-    val padding: AttrSlot<Float>,
-    val paddingHorizontal: AttrSlot<Float>,
-    val paddingVertical: AttrSlot<Float>,
-    val backgroundColor: AttrSlot<String>,
-)
-
-/** 从属性集合里取出六个样式槽位。节点构造函数里写 `BoxStyle(attrs)`。 */
-fun styleOf(attrs: AttrSet): BoxStyle = BoxStyle(
-    width = attrs.attr(StyleAttrs.width),
-    height = attrs.attr(StyleAttrs.height),
-    padding = attrs.attr(StyleAttrs.padding),
-    paddingHorizontal = attrs.attr(StyleAttrs.paddingHorizontal),
-    paddingVertical = attrs.attr(StyleAttrs.paddingVertical),
-    backgroundColor = attrs.attr(StyleAttrs.backgroundColor),
-)
-
-/**
- * 样式 → Modifier。
- *
- * 属性值在解析期已经定型，这里只做「把语义翻译成 Modifier」，不再解析字符串；
- * 单位（`dp`）在这一层加。
- */
-@Composable
-fun BoxStyle.modifier(): Modifier {
-    var modifier: Modifier = Modifier
-
-    width.value()?.let { dimension ->
-        modifier = when (dimension) {
-            Dimension.Fill -> modifier.fillMaxWidth()
-            Dimension.Wrap -> modifier
-            is Dimension.Fixed -> modifier.width(dimension.value.dp)
-        }
-    }
-
-    height.value()?.let { dimension ->
-        modifier = when (dimension) {
-            Dimension.Fill -> modifier.fillMaxHeight()
-            Dimension.Wrap -> modifier
-            is Dimension.Fixed -> modifier.height(dimension.value.dp)
-        }
-    }
-
-    val all = padding.value()
-    val horizontal = paddingHorizontal.value() ?: all
-    val vertical = paddingVertical.value() ?: all
-    if (horizontal != null || vertical != null) {
-        modifier = modifier.padding(horizontal = (horizontal ?: 0f).dp, vertical = (vertical ?: 0f).dp)
-    }
-
-    // 非法颜色回退 Unspecified（等于「没设背景」），而不是画一层看不见的东西
-    backgroundColor.value().toColor()
-        .takeIf { it != Color.Unspecified }
-        ?.let { color -> modifier = modifier.background(color) }
-
-    return modifier
 }
 
 /**

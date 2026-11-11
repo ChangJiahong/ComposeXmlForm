@@ -57,24 +57,16 @@ import cn.changjiahong.composexmlform.api.getInt
 import cn.changjiahong.composexmlform.api.list
 import cn.changjiahong.composexmlform.api.patchJson
 import cn.changjiahong.composexmlform.api.rememberData
-import cn.changjiahong.composexmlform.api.rememberField
 import cn.changjiahong.composexmlform.api.reset
 import cn.changjiahong.composexmlform.api.set
 import cn.changjiahong.composexmlform.api.toJson
-import cn.changjiahong.composexmlform.components.BoxStyle
-import cn.changjiahong.composexmlform.components.StyleAttrs
-import cn.changjiahong.composexmlform.components.modifier
-import cn.changjiahong.composexmlform.components.styleOf
+import cn.changjiahong.composexmlform.api.decl.Props
+import cn.changjiahong.composexmlform.api.decl.PropsNode
+import cn.changjiahong.composexmlform.api.decl.component
+import cn.changjiahong.composexmlform.components.style
 import cn.changjiahong.composexmlform.components.toColor
 import cn.changjiahong.composexmlform.engine.diag.Diagnostic
-import cn.changjiahong.composexmlform.engine.node.Attr
-import cn.changjiahong.composexmlform.engine.node.AttrDef
-import cn.changjiahong.composexmlform.engine.node.AttrSlot
-import cn.changjiahong.composexmlform.engine.node.Node
 import cn.changjiahong.composexmlform.engine.render.DiagnosticSink
-import cn.changjiahong.composexmlform.engine.render.NodeRenderer
-import cn.changjiahong.composexmlform.engine.render.orElse
-import cn.changjiahong.composexmlform.engine.render.value
 import cn.changjiahong.composexmlform.engine.value.DataObject
 import kotlinx.coroutines.launch
 
@@ -189,81 +181,57 @@ private fun DataObject.addContact() {
 /**
  * 自定义组件示例：新增组件不需要改动引擎核心。
  *
- * 三件事：声明属性（`AttrSlot`）、声明节点、注册「标签 + 构造器 + 渲染器」。
- * 尺寸 / padding 这类样式属性的声明在 `StyleAttrs` 里，`styleOf(attrs)` 一次取全。
+ * **全部代码就是这三段**：属性一行一个、一个 Composable、一行注册。
+ * 属性名 / 类型 / 默认值 / 可写性都在构造函数里，没有 `*Attrs` 对象、
+ * 没有 `create` lambda 里的 `attrs.attr(...)`、没有 `NodeRenderer` 实现类。
  */
-class RatingBarNode(
-    id: String,
-    val value: AttrSlot<Long>,
-    val max: AttrSlot<Long>,
-    val label: AttrSlot<String>,
-    val color: AttrSlot<String>,
-    val style: BoxStyle,
-) : Node(id)
+class RatingBarNode(props: Props) : PropsNode(props) {
 
-private object RatingBarAttrs {
-    /** 评分要写回数据，所以是**可写槽位**：只接受 `{{path}}`，不写则退化为局部 state。 */
-    val value: AttrDef<Long> = Attr.varInt("value", default = 0L)
-    val max: AttrDef<Long> = Attr.int("max", default = 5L)
-    val label: AttrDef<String> = Attr.string("label")
-    val color: AttrDef<String> = Attr.string("color")
+    /** 评分要写回数据，所以是**可写属性**：只接受 `{{path}}`，不写则退化为本行局部 state。 */
+    var value by props.varLong("value", 0L)
 
-    val All: List<AttrDef<*>> = listOf(value, max, label, color) + StyleAttrs.All
+    val max by props.long("max", 5L)
+
+    val label by props.string("label")
+
+    val color by props.string("color")
+
+    val style = props.style()
 }
 
-// NodeRenderer 是 fun interface：直接用 object 实现，不需要（也不能）带构造括号。
-object RatingBarRenderer : NodeRenderer<RatingBarNode> {
+@Composable
+fun RatingBar(node: RatingBarNode) {
+    val max = node.max.toInt()
+    val current = node.value.toInt()
+    val activeColor = node.color.toColor()
+        .takeIf { it != Color.Unspecified } ?: Color(0xFFF5A623)
+    val label = node.label
 
-    @Composable
-    override fun Render(node: RatingBarNode) {
-        val (bound, onChange) = node.value.rememberField<Long>()
-        val max = node.max.orElse(5L).toInt()
-        val current = (bound ?: 0L).toInt()
-        val activeColor = node.color.value().toColor()
-            .takeIf { it != Color.Unspecified } ?: Color(0xFFF5A623)
-        val label = node.label.value()
-
-        Column(modifier = node.style.modifier()) {
-            if (label != null) {
+    Column(modifier = node.style.modifier()) {
+        if (label != null) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            repeat(max) { index ->
                 Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = "★",
+                    fontSize = 26.sp,
+                    color = if (index < current) activeColor else Color(0xFFD8D8D8),
+                    modifier = Modifier
+                        .clickable { node.value = (index + 1).toLong() }
+                        .padding(1.dp),
                 )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                repeat(max) { index ->
-                    Text(
-                        text = "★",
-                        fontSize = 26.sp,
-                        color = if (index < current) activeColor else Color(0xFFD8D8D8),
-                        modifier = Modifier
-                            .clickable { onChange((index + 1).toLong()) }
-                            .padding(1.dp),
-                    )
-                }
             }
         }
     }
 }
 
 val DemoComponents: ComponentModule = ComponentModule { registry ->
-    registry.register(
-        nodeClass = RatingBarNode::class,
-        tag = "RatingBar",
-        attributes = RatingBarAttrs.All,
-        create = { id, attrs, _ ->
-            RatingBarNode(
-                id = id,
-                value = attrs.attr(RatingBarAttrs.value),
-                max = attrs.attr(RatingBarAttrs.max),
-                label = attrs.attr(RatingBarAttrs.label),
-                color = attrs.attr(RatingBarAttrs.color),
-                style = styleOf(attrs),
-            )
-        },
-        renderer = RatingBarRenderer,
-    )
+    registry.component("RatingBar", create = ::RatingBarNode, render = ::RatingBar)
 }
 
 // ---------------- 入口 ----------------

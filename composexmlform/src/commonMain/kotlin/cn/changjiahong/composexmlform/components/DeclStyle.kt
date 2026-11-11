@@ -15,8 +15,8 @@ import cn.changjiahong.composexmlform.api.decl.Props
 /**
  * 六个样式属性的**一次声明**：节点构造函数里写 `val style = props.style()` 就全有了。
  *
- * 与旧的 [BoxStyle] 的区别只有一处：样式槽位是委托出来的值（`Prop`），不是槽位对象，
- * 所以 `modifier()` 不再是 `@Composable` —— 读值不需要组合上下文，`Props` 里已经带着现场。
+ * 样式槽位是委托出来的值（`Prop`），不是槽位对象，所以 `modifier()` 不是 `@Composable` ——
+ * 读值不需要组合上下文，`Props` 里已经带着现场。
  */
 class StyleFields internal constructor(props: Props) {
 

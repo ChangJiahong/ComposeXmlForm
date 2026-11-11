@@ -43,6 +43,10 @@ internal class Schema(val tag: String) {
     val decls: List<AttrDef<*>> get() = order
 
     fun <T> resolve(created: AttrDef<T>): AttrDef<T> {
+        // 便宜但值钱的护栏：`props.varString("")` 少写一个参数就会声明一个空名字的属性，
+        // 编译期不报错，只在白名单里多一条谁也写不出来的键。
+        require(created.name.isNotEmpty()) { "『$tag』声明了一个空名字的属性" }
+
         val existing = byName[created.name]
         if (existing == null) {
             byName[created.name] = created
@@ -54,6 +58,9 @@ internal class Schema(val tag: String) {
         }
         require(existing.writable == created.writable) {
             "『$tag』的属性『${created.name}』可写性前后不一致"
+        }
+        require(existing.default == created.default) {
+            "『$tag』的属性『${created.name}』默认值前后不一致：${existing.default} / ${created.default}"
         }
         @Suppress("UNCHECKED_CAST")
         return existing as AttrDef<T>
@@ -85,6 +92,9 @@ class Props internal constructor(
 ) {
 
     internal fun slotOf(name: String): AttrSlot<*>? = slots?.get(name)
+
+    /** 属性在 XML 里的位置；声明期原型、或属性根本没写时是 `null`。渲染层报诊断用。 */
+    internal fun siteOf(name: String): AttrSite? = slots?.get(name)?.site
 
     /**
      * 声明 + 绑定一条属性。
@@ -182,6 +192,14 @@ class Prop<T> internal constructor(
 ) {
 
     private var local: MutableState<Any?>? = null
+
+    /**
+     * 这个属性在 XML 里的位置；声明期原型（或属性没写）时是 `null`。
+     *
+     * 只给渲染层报诊断用 —— 「枚举值不认识」这类报告需要问「报在哪一行哪个属性」，
+     * 而那是槽位知道的、承诺了「值就是值」的 [Prop] 不该暴露给宿主的细节。
+     */
+    internal fun site(): AttrSite? = props.slotOf(name)?.site
 
     /** 读。没有绑定路径时，「写过」优先于「写了什么」。 */
     fun get(): T {

@@ -2,20 +2,16 @@ package cn.changjiahong.composexmlform.components
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,83 +22,80 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import cn.changjiahong.composexmlform.api.rememberField
-import cn.changjiahong.composexmlform.engine.render.NodeRenderer
+import cn.changjiahong.composexmlform.api.decl.Props
+import cn.changjiahong.composexmlform.engine.diag.Code
+import cn.changjiahong.composexmlform.engine.diag.Diagnostic
+import cn.changjiahong.composexmlform.engine.diag.Severity
+import cn.changjiahong.composexmlform.engine.render.LocalDiagnostics
 import cn.changjiahong.composexmlform.engine.render.RenderChildren
-import cn.changjiahong.composexmlform.engine.render.choose
-import cn.changjiahong.composexmlform.engine.render.orElse
-import cn.changjiahong.composexmlform.engine.render.rememberHandler
-import cn.changjiahong.composexmlform.engine.render.value
 import cn.changjiahong.composexmlform.engine.value.Absent
 import cn.changjiahong.composexmlform.engine.value.DataArray
 import cn.changjiahong.composexmlform.engine.value.DataObject
 import cn.changjiahong.composexmlform.engine.value.Value
+import androidx.compose.foundation.layout.Box as LayoutBox
+import androidx.compose.foundation.layout.Column as LayoutColumn
+import androidx.compose.foundation.layout.Row as LayoutRow
+import androidx.compose.material3.Button as M3Button
+import androidx.compose.material3.Text as M3Text
 
 /**
  * 内置组件渲染器。
  *
- * 每个渲染器都只做一件事：**把槽位读成值，交给 Compose**。它们不持有数据、
- * 不写数据（除了可写槽位通过 `rememberField` 的回调间接写）、不管订阅 ——
+ * 每个渲染器都是一个**普通 Composable**：收一个已绑定本行现场的节点，`node.text` 就是
+ * `String`、`node.value = x` 就是写回。没有 `NodeRenderer` 实现类、没有 `value()` /
+ * `orElse()` / `rememberField()` —— 值的读取与写回都在节点的委托里做完了。
+ *
+ * 它们仍然只做一件事：**把值交给 Compose**。不持有数据、不管订阅 ——
  * 读 `MutableState` 即订阅，粒度精确到被读的那个字段。
+ *
+ * 与 Compose 同名的三个布局函数（`Column` / `Row` / `Box`）在这里就是组件渲染器，
+ * 所以文件内改用 `LayoutColumn` / `LayoutRow` / `LayoutBox` 别名调用真正的布局。
  */
 
-/** `Text`：只读绑定。没写的属性保持 `Unspecified`，由主题决定。 */
-class TextNodeRenderer : NodeRenderer<TextNode> {
+/** `Text`：只读属性。没写的保持 `Unspecified`，由主题决定。 */
+@Composable
+fun Text(node: TextNode) {
+    val maxLines = node.maxLines?.toInt() ?: Int.MAX_VALUE
 
-    @Composable
-    override fun Render(node: TextNode) {
-        val maxLines = node.maxLines.value()?.toInt() ?: Int.MAX_VALUE
-
-        Text(
-            text = node.text.orElse(""),
-            modifier = node.style.modifier(),
-            color = node.color.value().toColor(),
-            fontSize = node.fontSize.value()?.sp ?: TextUnit.Unspecified,
-            fontWeight = node.fontWeight.value().toFontWeight(),
-            textAlign = node.textAlign.value().toTextAlign(),
-            maxLines = maxLines,
-            overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis,
-        )
-    }
+    M3Text(
+        text = node.text,
+        modifier = node.style.modifier(),
+        color = node.color.toColor(),
+        fontSize = node.fontSize?.sp ?: TextUnit.Unspecified,
+        fontWeight = node.fontWeight.toFontWeight(),
+        textAlign = node.textAlign.toTextAlign(),
+        maxLines = maxLines,
+        overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis,
+    )
 }
 
-/** `Button`：`onClick` 是函数槽位，读成 [cn.changjiahong.composexmlform.engine.render.EventHandler]。 */
-class ButtonNodeRenderer : NodeRenderer<ButtonNode> {
+/** `Button`：`onClick` 是事件属性，读出来就是可空处理器。 */
+@Composable
+fun Button(node: ButtonNode) {
+    val handler = node.onClick
 
-    @Composable
-    override fun Render(node: ButtonNode) {
-        val handler = node.onClick.rememberHandler()
-
-        Button(
-            onClick = { handler?.invoke() },
-            modifier = node.style.modifier(),
-            enabled = node.enabled.orElse(true),
-        ) {
-            Text(node.text.orElse(""))
-        }
+    M3Button(
+        onClick = { handler?.invoke() },
+        modifier = node.style.modifier(),
+        enabled = node.enabled,
+    ) {
+        M3Text(node.text)
     }
 }
 
 /** `TextField`：写了 `value="{{path}}"` 就双向绑定，没写就是非受控输入框。 */
-class TextFieldNodeRenderer : NodeRenderer<TextFieldNode> {
-
-    @Composable
-    override fun Render(node: TextFieldNode) {
-        val (value, onChange) = node.value.rememberField<String>()
-        val label = node.label.value()
-        val placeholder = node.placeholder.value()
-
-        OutlinedTextField(
-            value = value.orEmpty(),
-            onValueChange = onChange,
-            modifier = node.style.modifier(),
-            enabled = node.enabled.orElse(true),
-            readOnly = node.readOnly.orElse(false),
-            singleLine = node.singleLine.orElse(true),
-            label = label?.let { text -> { Text(text) } },
-            placeholder = placeholder?.let { text -> { Text(text) } },
-        )
-    }
+@Composable
+fun TextField(node: TextFieldNode) {
+    OutlinedTextField(
+        value = node.value,
+        onValueChange = { node.value = it },
+        modifier = node.style.modifier(),
+        enabled = node.enabled,
+        readOnly = node.readOnly,
+        singleLine = node.singleLine,
+        label = node.label?.let { text -> { M3Text(text) } },
+        placeholder = node.placeholder?.let { text -> { M3Text(text) } },
+    )
 }
 
 /**
@@ -110,49 +103,43 @@ class TextFieldNodeRenderer : NodeRenderer<TextFieldNode> {
  *
  * `value` 保留原始类型（不转 String）：`"1"` 与 `1` 在选中判断上不等价。
  */
-class SelectNodeRenderer : NodeRenderer<SelectNode> {
+@Composable
+fun Select(node: SelectNode) {
+    var expanded by remember { mutableStateOf(false) }
 
-    @Composable
-    override fun Render(node: SelectNode) {
-        var expanded by remember { mutableStateOf(false) }
-        val (value, onChange) = node.value.rememberField<Value>()
+    val options = SelectOptions.parse(node.options)
+    val selected = options.firstOrNull { equalOption(it.value, node.value) }
 
-        val options = SelectOptions.parse(node.options.value())
-        val selected = options.firstOrNull { equalOption(it.value, value) }
-        val label = node.label.value()
-        val placeholder = node.placeholder.orElse("请选择")
-
-        Column(modifier = node.style.modifier()) {
-            if (label != null) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    LayoutColumn(modifier = node.style.modifier()) {
+        node.label?.let { label ->
+            M3Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        LayoutBox {
+            OutlinedButton(
+                onClick = { expanded = true },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = node.enabled,
+            ) {
+                M3Text(
+                    text = selected?.label ?: node.placeholder,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
-            Box {
-                OutlinedButton(
-                    onClick = { expanded = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = node.enabled.orElse(true),
-                ) {
-                    Text(
-                        text = selected?.label ?: placeholder,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                options.forEach { option ->
+                    DropdownMenuItem(
+                        text = { M3Text(option.label) },
+                        onClick = {
+                            expanded = false
+                            node.value = option.value
+                        },
                     )
-                }
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    options.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option.label) },
-                            onClick = {
-                                expanded = false
-                                onChange(option.value)
-                            },
-                        )
-                    }
                 }
             }
         }
@@ -160,67 +147,78 @@ class SelectNodeRenderer : NodeRenderer<SelectNode> {
 }
 
 /** `Column`：纵向排列，可选滚动。子节点全部渲染。 */
-class ColumnNodeRenderer : NodeRenderer<ColumnNode> {
+@Composable
+fun Column(node: ColumnNode) {
+    val spacing = node.spacing
+    val arrangement = if (spacing != null) {
+        Arrangement.spacedBy(spacing.dp)
+    } else {
+        node.props.chooseEnum(
+            node.arrangement,
+            "arrangement",
+            COLUMN_ARRANGEMENT,
+            Arrangement.Top,
+        )
+    }
+    val alignment = node.props.chooseEnum(
+        node.horizontalAlignment,
+        "horizontalAlignment",
+        HORIZONTAL_ALIGNMENT,
+        Alignment.Start,
+    )
 
-    @Composable
-    override fun Render(node: ColumnNode) {
-        val spacing = node.spacing.value()
-        val arrangement = if (spacing != null) {
-            Arrangement.spacedBy(spacing.dp)
-        } else {
-            node.arrangement.choose(COLUMN_ARRANGEMENT, Arrangement.Top)
-        }
-        val alignment = node.horizontalAlignment.choose(HORIZONTAL_ALIGNMENT, Alignment.Start)
+    var modifier = node.style.modifier()
+    if (node.scroll) modifier = modifier.verticalScroll(rememberScrollState())
 
-        var modifier = node.style.modifier()
-        if (node.scroll.orElse(false)) modifier = modifier.verticalScroll(rememberScrollState())
-
-        Column(
-            modifier = modifier,
-            verticalArrangement = arrangement,
-            horizontalAlignment = alignment,
-        ) {
-            RenderChildren(node)
-        }
+    LayoutColumn(
+        modifier = modifier,
+        verticalArrangement = arrangement,
+        horizontalAlignment = alignment,
+    ) {
+        RenderChildren(node)
     }
 }
 
 /** `Row`：横向排列，可选滚动。 */
-class RowNodeRenderer : NodeRenderer<RowNode> {
+@Composable
+fun Row(node: RowNode) {
+    val spacing = node.spacing
+    val arrangement = if (spacing != null) {
+        Arrangement.spacedBy(spacing.dp)
+    } else {
+        node.props.chooseEnum(node.arrangement, "arrangement", ROW_ARRANGEMENT, Arrangement.Start)
+    }
+    val alignment = node.props.chooseEnum(
+        node.verticalAlignment,
+        "verticalAlignment",
+        VERTICAL_ALIGNMENT,
+        Alignment.Top,
+    )
 
-    @Composable
-    override fun Render(node: RowNode) {
-        val spacing = node.spacing.value()
-        val arrangement = if (spacing != null) {
-            Arrangement.spacedBy(spacing.dp)
-        } else {
-            node.arrangement.choose(ROW_ARRANGEMENT, Arrangement.Start)
-        }
-        val alignment = node.verticalAlignment.choose(VERTICAL_ALIGNMENT, Alignment.Top)
+    var modifier = node.style.modifier()
+    if (node.scroll) modifier = modifier.horizontalScroll(rememberScrollState())
 
-        var modifier = node.style.modifier()
-        if (node.scroll.orElse(false)) modifier = modifier.horizontalScroll(rememberScrollState())
-
-        Row(
-            modifier = modifier,
-            horizontalArrangement = arrangement,
-            verticalAlignment = alignment,
-        ) {
-            RenderChildren(node)
-        }
+    LayoutRow(
+        modifier = modifier,
+        horizontalArrangement = arrangement,
+        verticalAlignment = alignment,
+    ) {
+        RenderChildren(node)
     }
 }
 
 /** `Box`：层叠，按 `contentAlignment` 对齐。 */
-class BoxNodeRenderer : NodeRenderer<BoxNode> {
+@Composable
+fun Box(node: BoxNode) {
+    val alignment = node.props.chooseEnum(
+        node.contentAlignment,
+        "contentAlignment",
+        BOX_ALIGNMENT,
+        Alignment.TopStart,
+    )
 
-    @Composable
-    override fun Render(node: BoxNode) {
-        val alignment = node.contentAlignment.choose(BOX_ALIGNMENT, Alignment.TopStart)
-
-        Box(modifier = node.style.modifier(), contentAlignment = alignment) {
-            RenderChildren(node)
-        }
+    LayoutBox(modifier = node.style.modifier(), contentAlignment = alignment) {
+        RenderChildren(node)
     }
 }
 
@@ -228,6 +226,40 @@ class BoxNodeRenderer : NodeRenderer<BoxNode> {
 //
 // 映射留在渲染器：`Alignment` / `Arrangement` 属于 Compose 排版体系，
 // 不该出现在节点定义的类型里。
+
+/**
+ * 枚举属性的标准读法：认识就用映射值，不认识**报一条诊断再退回默认值**。
+ *
+ * 静默回退是最难查的一类问题（`alignment="centar"` 悄悄变成 `Start`），
+ * 抛错又会白屏，所以两者都不取。`name` 只用于查诊断坐标 ——
+ * 值仍然来自 `node.xxx`，这里不做第二次读取。
+ */
+@Composable
+private fun <T> Props.chooseEnum(
+    value: String?,
+    name: String,
+    mapping: Map<String, T>,
+    default: T,
+): T {
+    val raw = value?.trim().orEmpty()
+    if (raw.isEmpty()) return default
+    mapping[raw]?.let { return it }
+    mapping[raw.lowercase()]?.let { return it }
+
+    val site = siteOf(name) ?: return default
+    val sink = LocalDiagnostics.current
+    val diagnostic = Diagnostic(
+        severity = Severity.Warning,
+        code = Code.AttributeFallback,
+        message = "『$name』的值 '$raw' 无效，可用：" +
+            mapping.keys.sorted().joinToString(" / "),
+        span = site.span,
+        tag = site.tag,
+        attribute = site.attribute,
+    )
+    SideEffect { sink.report(diagnostic) }
+    return default
+}
 
 private val COLUMN_ARRANGEMENT: Map<String, Arrangement.Vertical> = mapOf(
     "top" to Arrangement.Top,
